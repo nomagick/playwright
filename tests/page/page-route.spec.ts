@@ -359,7 +359,10 @@ it('should fail navigation when aborting main resource', async ({ page, server, 
     expect(error.message).toContain('net::ERR_FAILED');
 });
 
-it('should not work with redirects', async ({ page, server }) => {
+it('should work with redirects', async ({ page, server, browserName }) => {
+  it.fixme(browserName === 'webkit');
+  it.fixme(browserName === 'firefox');
+
   const intercepted = [];
   await page.route('**/*', route => {
     void route.continue();
@@ -374,7 +377,7 @@ it('should not work with redirects', async ({ page, server }) => {
   expect(response.status()).toBe(200);
   expect(response.url()).toContain('empty.html');
 
-  expect(intercepted.length).toBe(1);
+  expect(intercepted.length).toBe(5);
   expect(intercepted[0].resourceType()).toBe('document');
   expect(intercepted[0].isNavigationRequest()).toBe(true);
   expect(intercepted[0].url()).toContain('/non-existing-page.html');
@@ -414,7 +417,10 @@ it('should chain fallback w/ dynamic URL', async ({ page, server }) => {
   expect(intercepted).toEqual([3, 2, 1]);
 });
 
-it('should work with redirects for subresources', async ({ page, server }) => {
+it('should work with redirects for subresources', async ({ page, server, browserName }) => {
+  it.fixme(browserName === 'webkit');
+  it.fixme(browserName === 'firefox');
+
   const intercepted = [];
   await page.route('**/*', route => {
     void route.continue();
@@ -429,7 +435,7 @@ it('should work with redirects for subresources', async ({ page, server }) => {
   expect(response.status()).toBe(200);
   expect(response.url()).toContain('one-style.html');
 
-  expect(intercepted.length).toBe(2);
+  expect(intercepted.length).toBe(5);
   expect(intercepted[0].resourceType()).toBe('document');
   expect(intercepted[0].url()).toContain('one-style.html');
 
@@ -573,6 +579,72 @@ it('should fulfill with redirect status', async ({ page, server, browserName }) 
     return data.text();
   }, server.PREFIX + '/redirect_this');
   expect(text).toBe('foo');
+});
+
+it('should intercept redirect target when fulfilling with redirect status', async ({ page, server, browserName }) => {
+  it.fixme(browserName === 'webkit');
+  it.fixme(browserName === 'firefox');
+
+  const intercepted: string[] = [];
+  await page.goto(server.PREFIX + '/title.html');
+  server.setRoute('/final', (req, res) => res.end('foo'));
+  await page.route('**/*', async (route, request) => {
+    intercepted.push(request.url());
+    if (request.url() === server.PREFIX + '/redirect_this')
+      await route.fulfill({ status: 301, headers: { 'location': '/final' } });
+    else
+      await route.continue();
+  });
+
+  const text = await page.evaluate(async url => {
+    const data = await fetch(url);
+    return data.text();
+  }, server.PREFIX + '/redirect_this');
+  expect(text).toBe('foo');
+  expect(intercepted).toContain(server.PREFIX + '/redirect_this');
+  expect(intercepted).toContain(server.PREFIX + '/final');
+});
+
+it('should intercept server-originated redirect', async ({ page, server, browserName }) => {
+  it.fixme(browserName === 'webkit');
+  it.fixme(browserName === 'firefox');
+
+  server.setRedirect('/redirect', '/final');
+  server.setRoute('/final', (req, res) => res.end('bar'));
+
+  const intercepted: string[] = [];
+  await page.route('**/*', async (route, request) => {
+    intercepted.push(request.url());
+    await route.continue();
+  });
+
+  const response = await page.goto(server.PREFIX + '/redirect');
+  expect(response!.ok()).toBe(true);
+  expect(intercepted).toContain(server.PREFIX + '/redirect');
+  expect(intercepted).toContain(server.PREFIX + '/final');
+  expect(intercepted.indexOf(server.PREFIX + '/final')).toBeGreaterThan(intercepted.indexOf(server.PREFIX + '/redirect'));
+});
+
+it('should expose redirectedFrom on intercepted redirect target', async ({ page, server, browserName }) => {
+  it.fixme(browserName === 'webkit');
+  it.fixme(browserName === 'firefox');
+
+  server.setRedirect('/redirect', '/final');
+  server.setRoute('/final', (req, res) => res.end('bar'));
+
+  let redirectTarget: string | undefined;
+  let redirectSource: string | null | undefined;
+  await page.route('**/*', async (route, request) => {
+    if (request.url() === server.PREFIX + '/final') {
+      redirectTarget = request.url();
+      redirectSource = request.redirectedFrom()?.url();
+    }
+    await route.continue();
+  });
+
+  await page.goto(server.PREFIX + '/redirect');
+  expect(redirectTarget).toBe(server.PREFIX + '/final');
+  expect(redirectSource).toBe(server.PREFIX + '/redirect');
 });
 
 it('should not fulfill with redirect status', async ({ page, server, browserName }) => {

@@ -335,20 +335,11 @@ export class CRNetworkManager {
     }
 
     let route = null;
-    let headersOverride: types.HeadersArray | undefined;
     if (requestPausedEvent) {
-      // We do not support intercepting redirects.
-      if (redirectedFrom || (!this._userRequestInterceptionEnabled && this._protocolRequestInterceptionEnabled)) {
-        // Chromium does not preserve header overrides between redirects, so we have to do it ourselves.
-        headersOverride = redirectedFrom?._originalRequestRoute?._alreadyContinuedParams?.headers;
-        if (headersOverride) {
-          const originalHeaders = Object.entries(requestPausedEvent.request.headers).map(([name, value]) => ({ name, value }));
-          headersOverride = network.applyHeadersOverrides(originalHeaders, headersOverride);
-        }
-        requestPausedSessionInfo!.session._sendMayFail('Fetch.continueRequest', { requestId: requestPausedEvent.requestId, headers: headersOverride });
-      } else {
+      if (!this._userRequestInterceptionEnabled && this._protocolRequestInterceptionEnabled)
+        requestPausedSessionInfo!.session._sendMayFail('Fetch.continueRequest', { requestId: requestPausedEvent.requestId });
+      else
         route = new RouteImpl(requestPausedSessionInfo!.session, requestPausedEvent.requestId);
-      }
     }
     const isNavigationRequest = requestWillBeSentEvent.requestId === requestWillBeSentEvent.loaderId && requestWillBeSentEvent.type === 'Document';
     const documentId = isNavigationRequest ? requestWillBeSentEvent.loaderId : undefined;
@@ -362,7 +353,6 @@ export class CRNetworkManager {
       requestWillBeSentEvent,
       requestPausedEvent,
       redirectedFrom,
-      headersOverride: headersOverride || null,
     });
     this._requestIdToRequest.set(requestWillBeSentEvent.requestId, request);
 
@@ -568,8 +558,6 @@ class InterceptableRequest {
   readonly _documentId: string | undefined;
   readonly _timestamp: number;
   readonly _wallTime: number;
-  // Only first request in the chain can be intercepted, so this will
-  // store the first and only Route in the chain (if any).
   readonly _originalRequestRoute: RouteImpl | undefined;
   session: CRSession;
 
@@ -583,9 +571,8 @@ class InterceptableRequest {
     requestWillBeSentEvent: Protocol.Network.requestWillBeSentPayload;
     requestPausedEvent: Protocol.Fetch.requestPausedPayload | undefined;
     redirectedFrom: InterceptableRequest | null;
-    headersOverride: types.HeadersArray | null;
   }) {
-    const { session, context, frame, documentId, route, requestWillBeSentEvent, requestPausedEvent, redirectedFrom, serviceWorker, headersOverride } = options;
+    const { session, context, frame, documentId, route, requestWillBeSentEvent, requestPausedEvent, redirectedFrom, serviceWorker } = options;
     this.session = session;
     this._timestamp = requestWillBeSentEvent.timestamp;
     this._wallTime = requestWillBeSentEvent.wallTime;
@@ -605,7 +592,7 @@ class InterceptableRequest {
     if (entries && entries.length)
       postDataBuffer = Buffer.concat(entries.map(entry => Buffer.from(entry.bytes!, 'base64')));
 
-    this.request = new network.Request(context, frame, serviceWorker, redirectedFrom?.request || null, documentId, url, toResourceType(requestWillBeSentEvent.type || 'Other'), method, postDataBuffer,  headersOverride || headersObjectToArray(headers));
+    this.request = new network.Request(context, frame, serviceWorker, redirectedFrom?.request || null, documentId, url, toResourceType(requestWillBeSentEvent.type || 'Other'), method, postDataBuffer, headersObjectToArray(headers));
   }
 }
 
