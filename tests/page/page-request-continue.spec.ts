@@ -46,7 +46,7 @@ it('should not allow to override unsafe HTTP headers', async ({ page, server, br
   const routePromise = new Promise<Route>(f => resolve = f);
   await page.route('**/*', route => resolve(route));
   const serverRequestPromise = server.waitForRequest('/empty.html');
-  page.goto(server.EMPTY_PAGE).catch(() => {});
+  page.goto(server.EMPTY_PAGE).catch(() => { });
   const route = await routePromise;
   await route.continue({
     headers: {
@@ -124,7 +124,7 @@ it('should override request url', async ({ page, server }) => {
 
 it('should not allow changing protocol when overriding url', async ({ page, server }) => {
   let resolve;
-  const errorPromise = new Promise<Error|null>(f => resolve = f);
+  const errorPromise = new Promise<Error | null>(f => resolve = f);
   await page.route('**/*', async route => {
     try {
       await route.continue({ url: 'file:///tmp/foo' });
@@ -133,7 +133,7 @@ it('should not allow changing protocol when overriding url', async ({ page, serv
       resolve(e);
     }
   });
-  page.goto(server.EMPTY_PAGE).catch(() => {});
+  page.goto(server.EMPTY_PAGE).catch(() => { });
   const error = await errorPromise;
   expect(error).toBeTruthy();
   expect(error.message).toContain('New URL must have same protocol as overridden URL');
@@ -150,7 +150,7 @@ it('should not throw if request was cancelled by the page', async ({ page, serve
   page.evaluate(url => {
     globalThis.controller = new AbortController();
     return fetch(url, { signal: globalThis.controller.signal });
-  }, server.PREFIX + '/data.json').catch(() => {});
+  }, server.PREFIX + '/data.json').catch(() => { });
   const route = await interceptPromise;
   const failurePromise = page.waitForEvent('requestfailed');
   await page.evaluate(() => globalThis.controller.abort());
@@ -197,7 +197,7 @@ it.describe('post data', () => {
     const data = 'a'.repeat(7500);
     await page.route('**/*', route => {
       const headers = route.request().headers();
-      headers['content-type'] =  'application/json';
+      headers['content-type'] = 'application/json';
       void route.continue({ postData: data, headers });
     });
     const [serverRequest] = await Promise.all([
@@ -509,12 +509,13 @@ it('redirect after continue should be able to delete cookie', {
   expect(serverRequest.headers['cookie']).toBeFalsy();
 });
 
-it('continue should propagate headers to redirects', {
+it('continue should not propagate headers to redirects', {
   annotation: [
     { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/28758' },
     { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/32045' },
   ]
-}, async ({ page, server }) => {
+}, async ({ page, server, browserName }) => {
+  it.skip(browserName !== 'chromium', 'Intercepting redirected requests is currently Chromium only');
   await server.setRedirect('/redirect', '/empty.html');
   await page.route('**/redirect', route => {
     void route.continue({
@@ -528,12 +529,13 @@ it('continue should propagate headers to redirects', {
     server.waitForRequest('/empty.html'),
     page.goto(server.PREFIX + '/redirect')
   ]);
-  expect(serverRequest.headers['custom']).toBe('value');
+  expect(serverRequest.headers['custom']).not.toBeDefined();
 });
 
 it('continue should drop content-length on redirects', {
   annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/36029' }
-}, async ({ page, server }) => {
+}, async ({ page, server, browserName }) => {
+  it.skip(browserName !== 'chromium', 'Intercepting redirected requests is currently Chromium only');
   await page.goto(server.EMPTY_PAGE);
 
   await server.setRedirect('/redirect', '/empty.html');
@@ -552,15 +554,16 @@ it('continue should drop content-length on redirects', {
   expect.soft(serverRequest.method).toBe('GET');
   expect.soft(serverRequest.headers['content-length']).toBeUndefined();
   expect.soft(serverRequest.headers['content-type']).toBeUndefined();
-  expect.soft(serverRequest.headers['custom']).toBe('value');
+  expect.soft(serverRequest.headers['custom']).not.toBeDefined();
 });
 
-it('redirected requests should report overridden headers', {
+it('redirected requests should not report original overridden headers', {
   annotation: [
     { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/31351' },
     { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/32045' },
   ]
-}, async ({ page, server }) => {
+}, async ({ page, server, browserName }) => {
+  it.skip(browserName !== 'chromium', 'Intercepting redirected requests is currently Chromium only');
   await server.setRedirect('/redirect', '/empty.html');
   await page.route('**/redirect', route => {
     const headers = route.request().headers();
@@ -572,18 +575,19 @@ it('redirected requests should report overridden headers', {
     server.waitForRequest('/empty.html'),
     page.goto(server.PREFIX + '/redirect')
   ]);
-  expect(serverRequest.headers['custom']).toBe('value');
+  expect(serverRequest.headers['custom']).not.toBeDefined();
   expect(response.request().url()).toBe(server.EMPTY_PAGE);
-  expect(response.request().headers()['custom']).toBe('value');
-  expect((await response.request().allHeaders())['custom']).toBe('value');
+  expect(response.request().headers()['custom']).not.toBeDefined();
+  expect((await response.request().allHeaders())['custom']).not.toBeDefined();
 });
 
-it('continue should delete headers on redirects', {
+it('continue should not delete headers on same origin redirects', {
   annotation: [
     { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/13106' },
     { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/32045' },
   ]
-}, async ({ page, server }) => {
+}, async ({ page, server, browserName }) => {
+  it.skip(browserName !== 'chromium', 'Intercepting redirected requests is currently Chromium only');
   await page.goto(server.PREFIX + '/empty.html');
   server.setRoute('/something', (request, response) => {
     response.writeHead(200, { 'Access-Control-Allow-Origin': '*' });
@@ -610,7 +614,7 @@ it('continue should delete headers on redirects', {
     server.waitForRequest('/something')
   ]);
   expect(text).toBe('done');
-  expect(serverRequest.headers.foo).toBeFalsy();
+  expect(serverRequest.headers.foo).toBe('a');
 });
 
 it('propagate headers same origin redirect', {
@@ -635,7 +639,7 @@ it('propagate headers same origin redirect', {
       return;
     }
     resolve(request);
-    response.writeHead(200, { });
+    response.writeHead(200, {});
     response.end('done');
   });
   await server.setRedirect('/redirect', '/something');
@@ -761,6 +765,7 @@ it('propagate headers cross origin redirect after interception', {
   ]
 }, async ({ page, server, browserName, isAndroid }) => {
   it.skip(isAndroid, 'No cross-process on Android');
+  it.skip(browserName !== 'chromium', 'Intercepting redirected requests is currently Chromium only');
 
   await page.goto(server.PREFIX + '/empty.html');
   let resolve;
@@ -808,12 +813,9 @@ it('propagate headers cross origin redirect after interception', {
   }, server.PREFIX + '/redirect');
   expect(text).toBe('done');
   const serverRequest = await serverRequestPromise;
-  if (browserName === 'webkit')
-    expect.soft(serverRequest.headers['authorization']).toBeFalsy();
-  else
-    expect.soft(serverRequest.headers['authorization']).toBe('credentials');
+  expect.soft(serverRequest.headers['authorization']).toBeFalsy();
   expect.soft(serverRequest.headers['cookie']).toBeFalsy();
-  expect.soft(serverRequest.headers['custom']).toBe('foo');
+  expect.soft(serverRequest.headers['custom']).toBeFalsy();
 });
 
 it('should intercept css variable with background url', async ({ page, server }) => {
