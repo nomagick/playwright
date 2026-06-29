@@ -46,7 +46,7 @@ import { Worker } from './worker';
 import { TimeoutSettings } from './timeoutSettings';
 import { mkdirIfNeeded } from './fileUtils';
 
-import type { BrowserContextOptions, Headers, SetStorageState, StorageState, TimeoutOptions, WaitForEventOptions } from './types';
+import type { BrowserContextOptions, Headers, HeadersArray, SetStorageState, StorageState, TimeoutOptions, WaitForEventOptions } from './types';
 import type * as structs from '../../types/structs';
 import type * as api from '../../types/types';
 import type { URLMatch } from '@isomorphic/urlMatch';
@@ -345,9 +345,9 @@ export class BrowserContext extends ChannelOwner<channels.BrowserContextChannel>
     await this._channel.setGeolocation({ geolocation: geolocation || undefined });
   }
 
-  async setExtraHTTPHeaders(headers: Headers): Promise<void> {
+  async setExtraHTTPHeaders(headers: HeadersArray | Headers): Promise<void> {
     network.validateHeaders(headers);
-    await this._channel.setExtraHTTPHeaders({ headers: headersObjectToArray(headers) });
+    await this._channel.setExtraHTTPHeaders({ headers: Array.isArray(headers) ? headers : headersObjectToArray(headers) });
   }
 
   async setOffline(offline: boolean): Promise<void> {

@@ -833,7 +833,16 @@ export class WebSocket extends ChannelOwner<channels.WebSocketChannel> implement
   }
 }
 
-export function validateHeaders(headers: Headers) {
+export function validateHeaders(headers: HeadersArray | Headers) {
+  if (Array.isArray(headers)) {
+    for (const { name, value } of headers) {
+      if (!isString(name))
+        throw new Error(`Expected name of header to be String, but "${typeof name}" is found.`);
+      if (!isString(value))
+        throw new Error(`Expected value of header "${name}" to be String, but "${typeof value}" is found.`);
+    }
+    return;
+  }
   for (const key of Object.keys(headers)) {
     const value = headers[key];
     if (!Object.is(value, undefined) && !isString(value))
