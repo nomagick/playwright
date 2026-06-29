@@ -75,14 +75,14 @@ export type ClearNetworkCookieOptions = {
 type SerializedFallbackOverrides = {
   url?: string;
   method?: string;
-  headers?: Headers;
+  headers?: HeadersArray | Headers;
   postDataBuffer?: Buffer;
 };
 
 type FallbackOverrides = {
   url?: string;
   method?: string;
-  headers?: Headers;
+  headers?: HeadersArray | Headers;
   postData?: string | Buffer | Serializable;
 };
 
@@ -169,13 +169,13 @@ export class Request extends ChannelOwner<channels.RequestChannel> implements ap
    */
   headers(): Headers {
     if (this._fallbackOverrides.headers)
-      return RawHeaders._fromHeadersObjectLossy(this._fallbackOverrides.headers).headers();
+      return RawHeaders._fromHeadersObject(this._fallbackOverrides.headers).headers();
     return this._provisionalHeaders.headers();
   }
 
   async _actualHeaders(): Promise<RawHeaders> {
     if (this._fallbackOverrides.headers)
-      return RawHeaders._fromHeadersObjectLossy(this._fallbackOverrides.headers);
+      return RawHeaders._fromHeadersObject(this._fallbackOverrides.headers);
 
     if (!this._actualHeadersPromise) {
       this._actualHeadersPromise = this._wrapApiCall(async () => {
@@ -352,7 +352,7 @@ export class Route extends ChannelOwner<channels.RouteChannel> implements api.Ro
     });
   }
 
-  async fulfill(options: { response?: api.APIResponse, status?: number, headers?: Headers, contentType?: string, body?: string | Buffer, json?: any, path?: string } = {}) {
+  async fulfill(options: { response?: api.APIResponse, status?: number, headers?: HeadersArray | Headers, contentType?: string, body?: string | Buffer, json?: any, path?: string } = {}) {
     await this._handleRoute(async () => {
       await this._innerFulfill(options);
     });
@@ -369,7 +369,7 @@ export class Route extends ChannelOwner<channels.RouteChannel> implements api.Ro
     }
   }
 
-  private async _innerFulfill(options: { response?: api.APIResponse, status?: number, headers?: Headers, contentType?: string, body?: string | Buffer, json?: any, path?: string } = {}): Promise<void> {
+  private async _innerFulfill(options: { response?: api.APIResponse, status?: number, headers?: HeadersArray | Headers, contentType?: string, body?: string | Buffer, json?: any, path?: string } = {}): Promise<void> {
     let fetchResponseUid;
     let { status: statusOption, headers: headersOption, body } = options;
 
@@ -405,21 +405,33 @@ export class Route extends ChannelOwner<channels.RouteChannel> implements api.Ro
       isBase64 = true;
     }
 
-    const headers: Headers = {};
-    for (const header of Object.keys(headersOption || {}))
-      headers[header.toLowerCase()] = String(headersOption![header]);
+    const headers: HeadersArray = [];
+    if (Array.isArray(headersOption)) {
+      headers.push(...headersOption);
+    } else {
+      for (const header of Object.keys(headersOption || {}))
+        headers.push({ name: header, value: String(headersOption![header]) });
+    }
+    let overrideContentType = undefined;
     if (options.contentType)
-      headers['content-type'] = String(options.contentType);
+      overrideContentType = String(options.contentType);
     else if (options.json)
-      headers['content-type'] = 'application/json';
+      overrideContentType = 'application/json';
     else if (options.path)
-      headers['content-type'] = getMimeTypeForPath(options.path) || 'application/octet-stream';
-    if (length && !('content-length' in headers))
-      headers['content-length'] = String(length);
+      overrideContentType = getMimeTypeForPath(options.path) || 'application/octet-stream';
+    if (overrideContentType) {
+      const contentTypeEntry = headers.find(h => h.name.toLowerCase() === 'content-type');
+      if (contentTypeEntry)
+        contentTypeEntry.value = overrideContentType;
+      else
+        headers.push({ name: 'Content-Type', value: overrideContentType });
+    }
+    if (length && !headers.some((h => h.name.toLowerCase() === 'content-length')))
+      headers.push({ name: 'Content-Length', value: String(length) });
 
     await this._raceWithTargetClose(this._channel.fulfill({
       status: statusOption || 200,
-      headers: headersObjectToArray(headers),
+      headers,
       body,
       isBase64,
       fetchResponseUid
@@ -449,7 +461,7 @@ export class Route extends ChannelOwner<channels.RouteChannel> implements api.Ro
     return await this._raceWithTargetClose(this._channel.continue({
       url: options.url,
       method: options.method,
-      headers: options.headers ? headersObjectToArray(options.headers) : undefined,
+      headers: Array.isArray(options.headers) ? options.headers : options.headers ? headersObjectToArray(options.headers) : undefined,
       postData: options.postDataBuffer,
       isFallback,
     }));
@@ -933,7 +945,9 @@ export class RawHeaders {
   private _headersArray: HeadersArray;
   private _headersMap = new MultiMap<string, string>();
 
-  static _fromHeadersObjectLossy(headers: Headers): RawHeaders {
+  static _fromHeadersObject(headers: HeadersArray | Headers): RawHeaders {
+    if (Array.isArray(headers))
+      return new RawHeaders(headers);
     const headersArray: HeadersArray = Object.entries(headers).map(([name, value]) => ({
       name, value
     })).filter(header => header.value !== undefined);

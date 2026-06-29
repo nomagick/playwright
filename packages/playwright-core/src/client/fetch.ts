@@ -39,7 +39,7 @@ import type * as channels from './channels';
 export type FetchOptions = {
   params?: { [key: string]: string | number | boolean; } | URLSearchParams | string,
   method?: string,
-  headers?: Headers,
+  headers?: HeadersArray | Headers,
   data?: string | Buffer | Serializable,
   form?: { [key: string]: string|number|boolean; } | FormData;
   multipart?: { [key: string]: string|number|boolean|fs.ReadStream|FilePayload; } | FormData;
@@ -51,7 +51,7 @@ export type FetchOptions = {
 };
 
 export type NewContextOptions = Omit<channels.PlaywrightNewRequestOptions, 'extraHTTPHeaders' | 'clientCertificates' | 'storageState' | 'tracesDir'> & {
-  extraHTTPHeaders?: Headers,
+  extraHTTPHeaders?: HeadersArray | Headers,
   storageState?: string | SetStorageState,
   clientCertificates?: ClientCertificate[];
 };
@@ -74,7 +74,7 @@ export class APIRequest implements api.APIRequest {
       options.storageState;
     const context = APIRequestContext.from((await this._playwright._channel.newRequest({
       ...options,
-      extraHTTPHeaders: options.extraHTTPHeaders ? headersObjectToArray(options.extraHTTPHeaders) : undefined,
+      extraHTTPHeaders: Array.isArray(options.extraHTTPHeaders) ? options.extraHTTPHeaders : options.extraHTTPHeaders ? headersObjectToArray(options.extraHTTPHeaders) : undefined,
       storageState,
       tracesDir: this._playwright._defaultLaunchOptions?.tracesDir, // We do not expose tracesDir in the API, so do not allow options to accidentally override it.
       clientCertificates: await toClientCertificatesProtocol(options.clientCertificates),
@@ -188,7 +188,7 @@ export class APIRequestContext extends ChannelOwner<channels.APIRequestContextCh
         encodedParams = options.params.toString();
       // Cannot call allHeaders() here as the request may be paused inside route handler.
       const headersObj = options.headers || options.request?.headers();
-      const headers = headersObj ? headersObjectToArray(headersObj) : undefined;
+      const headers = Array.isArray(headersObj) ? headersObj : headersObj ? headersObjectToArray(headersObj) : undefined;
       let jsonData: any;
       let formData: channels.NameValue[] | undefined;
       let multipartData: channels.FormField[] | undefined;
