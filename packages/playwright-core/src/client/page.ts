@@ -56,7 +56,7 @@ import type { APIRequestContext } from './fetch';
 import type { WaitForNavigationOptions } from './frame';
 import type { FrameLocator, Locator, LocatorOptions } from './locator';
 import type { RouteHandlerCallback, WebSocketRouteHandlerCallback } from './network';
-import type { FilePayload, Headers, LifecycleEvent, SelectOption, SelectOptionOptions, Size, TimeoutOptions, WaitForEventOptions, WaitForFunctionOptions } from './types';
+import type { FilePayload, Headers, HeadersArray, LifecycleEvent, SelectOption, SelectOptionOptions, Size, TimeoutOptions, WaitForEventOptions, WaitForFunctionOptions } from './types';
 import type * as structs from '../../types/structs';
 import type * as api from '../../types/types';
 import type { ByRoleOptions } from '@isomorphic/locatorUtils';
@@ -395,9 +395,9 @@ export class Page extends ChannelOwner<channels.PageChannel> implements api.Page
     this._evaluateCallbacks = [];
   }
 
-  async setExtraHTTPHeaders(headers: Headers) {
+  async setExtraHTTPHeaders(headers: HeadersArray | Headers) {
     validateHeaders(headers);
-    await this._channel.setExtraHTTPHeaders({ headers: headersObjectToArray(headers) }, kNoTimeout);
+    await this._channel.setExtraHTTPHeaders({ headers: Array.isArray(headers) ? headers : headersObjectToArray(headers) }, kNoTimeout);
   }
 
   url(): string {
