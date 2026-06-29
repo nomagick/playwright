@@ -405,7 +405,6 @@ export class Route extends SdkObject {
       this._request._responseBodyOverride = { body, isBase64 };
     }
     const headers = [...(overrides.headers || [])];
-    this._maybeAddCorsHeaders(headers);
     this._request._context.emit(BrowserContext.Events.RequestFulfilled, this._request);
     await this._delegate.fulfill({
       status: overrides.status || 200,
@@ -414,24 +413,6 @@ export class Route extends SdkObject {
       isBase64,
     });
     this._endHandling();
-  }
-
-  // See https://github.com/microsoft/playwright/issues/12929
-  private _maybeAddCorsHeaders(headers: NameValue[]) {
-    const origin = this._request.headerValue('origin');
-    if (!origin)
-      return;
-    const requestUrl = new URL(this._request.url());
-    if (!requestUrl.protocol.startsWith('http'))
-      return;
-    if (requestUrl.origin === origin.trim())
-      return;
-    const corsHeader = headers.find(({ name }) => name === 'access-control-allow-origin');
-    if (corsHeader)
-      return;
-    headers.push({ name: 'access-control-allow-origin', value: origin });
-    headers.push({ name: 'access-control-allow-credentials', value: 'true' });
-    headers.push({ name: 'vary', value: 'Origin' });
   }
 
   async continue(overrides: channels.RouteContinueParams) {
