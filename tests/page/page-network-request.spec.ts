@@ -63,7 +63,8 @@ it('should work for a redirect', async ({ page, server }) => {
 });
 
 // https://github.com/microsoft/playwright/issues/3993
-it('should not work for a redirect and interception', async ({ page, server }) => {
+it('should work for a redirect and interception', async ({ page, server, browserName }) => {
+  it.skip(browserName !== 'chromium', 'Intercepting redirected requests is currently Chromium only');
   server.setRedirect('/foo.html', '/empty.html');
   const requests = [];
   await page.route('**', route => {
@@ -74,8 +75,9 @@ it('should not work for a redirect and interception', async ({ page, server }) =
 
   expect(page.url()).toBe(server.PREFIX + '/empty.html');
 
-  expect(requests.length).toBe(1);
+  expect(requests.length).toBe(2);
   expect(requests[0].url()).toBe(server.PREFIX + '/foo.html');
+  expect(requests[1].url()).toBe(server.PREFIX + '/empty.html');
 });
 
 it('should return headers', async ({ page, server, browserName }) => {
@@ -148,8 +150,9 @@ it('should get the same headers as the server CORS', async ({ page, server, brow
   expect(headers).toEqual(adjustServerHeaders(serverRequest.headers, browserName));
 });
 
-it('should not get preflight CORS requests when intercepting', async ({ page, server, browserName, isAndroid, isBidi }) => {
+it('should get preflight CORS requests when intercepting', async ({ page, server, browserName, isAndroid, isBidi }) => {
   it.fail(isAndroid, 'Playwright does not get CORS pre-flight on Android');
+  it.skip(browserName !== 'chromium', 'Intercepting preflight requests is currently Chromium only');
   await page.goto(server.PREFIX + '/empty.html');
 
   const requests = [];
@@ -198,12 +201,7 @@ it('should not get preflight CORS requests when intercepting', async ({ page, se
       return data.text();
     }, server.CROSS_PROCESS_PREFIX + '/something');
     expect(text).toBe('done');
-    // Check that there was no preflight (OPTIONS) request.
-    expect(routed).toEqual(['DELETE']);
-    if (browserName === 'firefox' && !isBidi)
-      expect(requests).toEqual(['OPTIONS', 'DELETE']);
-    else
-      expect(requests).toEqual(['DELETE']);
+    expect(routed).toEqual(['OPTIONS', 'DELETE']);
   }
 });
 
