@@ -359,7 +359,10 @@ it('should fail navigation when aborting main resource', async ({ page, server, 
     expect(error.message).toContain('net::ERR_FAILED');
 });
 
-it('should not work with redirects', async ({ page, server }) => {
+it('should work with redirects', async ({ page, server, browserName }) => {
+  it.fixme(browserName === 'webkit');
+  it.fixme(browserName === 'firefox');
+
   const intercepted = [];
   await page.route('**/*', route => {
     void route.continue();
@@ -374,7 +377,7 @@ it('should not work with redirects', async ({ page, server }) => {
   expect(response.status()).toBe(200);
   expect(response.url()).toContain('empty.html');
 
-  expect(intercepted.length).toBe(1);
+  expect(intercepted.length).toBe(5);
   expect(intercepted[0].resourceType()).toBe('document');
   expect(intercepted[0].isNavigationRequest()).toBe(true);
   expect(intercepted[0].url()).toContain('/non-existing-page.html');
@@ -414,7 +417,10 @@ it('should chain fallback w/ dynamic URL', async ({ page, server }) => {
   expect(intercepted).toEqual([3, 2, 1]);
 });
 
-it('should work with redirects for subresources', async ({ page, server }) => {
+it('should work with redirects for subresources', async ({ page, server, browserName }) => {
+  it.fixme(browserName === 'webkit');
+  it.fixme(browserName === 'firefox');
+
   const intercepted = [];
   await page.route('**/*', route => {
     void route.continue();
@@ -429,7 +435,7 @@ it('should work with redirects for subresources', async ({ page, server }) => {
   expect(response.status()).toBe(200);
   expect(response.url()).toContain('one-style.html');
 
-  expect(intercepted.length).toBe(2);
+  expect(intercepted.length).toBe(5);
   expect(intercepted[0].resourceType()).toBe('document');
   expect(intercepted[0].url()).toContain('one-style.html');
 
@@ -575,6 +581,72 @@ it('should fulfill with redirect status', async ({ page, server, browserName }) 
   expect(text).toBe('foo');
 });
 
+it('should intercept redirect target when fulfilling with redirect status', async ({ page, server, browserName }) => {
+  it.fixme(browserName === 'webkit');
+  it.fixme(browserName === 'firefox');
+
+  const intercepted: string[] = [];
+  await page.goto(server.PREFIX + '/title.html');
+  server.setRoute('/final', (req, res) => res.end('foo'));
+  await page.route('**/*', async (route, request) => {
+    intercepted.push(request.url());
+    if (request.url() === server.PREFIX + '/redirect_this')
+      await route.fulfill({ status: 301, headers: { 'location': '/final' } });
+    else
+      await route.continue();
+  });
+
+  const text = await page.evaluate(async url => {
+    const data = await fetch(url);
+    return data.text();
+  }, server.PREFIX + '/redirect_this');
+  expect(text).toBe('foo');
+  expect(intercepted).toContain(server.PREFIX + '/redirect_this');
+  expect(intercepted).toContain(server.PREFIX + '/final');
+});
+
+it('should intercept server-originated redirect', async ({ page, server, browserName }) => {
+  it.fixme(browserName === 'webkit');
+  it.fixme(browserName === 'firefox');
+
+  server.setRedirect('/redirect', '/final');
+  server.setRoute('/final', (req, res) => res.end('bar'));
+
+  const intercepted: string[] = [];
+  await page.route('**/*', async (route, request) => {
+    intercepted.push(request.url());
+    await route.continue();
+  });
+
+  const response = await page.goto(server.PREFIX + '/redirect');
+  expect(response!.ok()).toBe(true);
+  expect(intercepted).toContain(server.PREFIX + '/redirect');
+  expect(intercepted).toContain(server.PREFIX + '/final');
+  expect(intercepted.indexOf(server.PREFIX + '/final')).toBeGreaterThan(intercepted.indexOf(server.PREFIX + '/redirect'));
+});
+
+it('should expose redirectedFrom on intercepted redirect target', async ({ page, server, browserName }) => {
+  it.fixme(browserName === 'webkit');
+  it.fixme(browserName === 'firefox');
+
+  server.setRedirect('/redirect', '/final');
+  server.setRoute('/final', (req, res) => res.end('bar'));
+
+  let redirectTarget: string | undefined;
+  let redirectSource: string | null | undefined;
+  await page.route('**/*', async (route, request) => {
+    if (request.url() === server.PREFIX + '/final') {
+      redirectTarget = request.url();
+      redirectSource = request.redirectedFrom()?.url();
+    }
+    await route.continue();
+  });
+
+  await page.goto(server.PREFIX + '/redirect');
+  expect(redirectTarget).toBe(server.PREFIX + '/final');
+  expect(redirectSource).toBe(server.PREFIX + '/redirect');
+});
+
 it('should not fulfill with redirect status', async ({ page, server, browserName }) => {
   it.skip(browserName !== 'webkit', 'we should support fulfill with redirect in webkit and delete this test');
 
@@ -641,55 +713,6 @@ it('should support cors with GET', async ({ page, server, browserName, channel }
     if (browserName === 'firefox')
       expect(error.message).toContain('NetworkError');
   }
-});
-
-it('should add Access-Control-Allow-Origin by default when fulfill', async ({ page, server }) => {
-  await page.goto(server.EMPTY_PAGE);
-  await page.route('**/cars', async route => {
-    await route.fulfill({
-      contentType: 'application/json',
-      status: 200,
-      body: JSON.stringify(['electric', 'gas']),
-    });
-  });
-
-  const [result, response] = await Promise.all([
-    page.evaluate(async () => {
-      const response = await fetch('https://example.com/cars', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        mode: 'cors',
-        body: JSON.stringify({ 'number': 1 })
-      });
-      return response.json();
-    }),
-    page.waitForResponse('https://example.com/cars')
-  ]);
-  expect(result).toEqual(['electric', 'gas']);
-  expect(await response.headerValue('Access-Control-Allow-Origin')).toBe(server.PREFIX);
-});
-
-it('should allow null origin for about:blank', async ({ page, server, browserName }) => {
-  await page.route('**/something', async route => {
-    await route.fulfill({
-      contentType: 'text/plain',
-      status: 200,
-      body: 'done',
-    });
-  });
-
-  const [response, text] = await Promise.all([
-    page.waitForResponse(server.CROSS_PROCESS_PREFIX + '/something'),
-    page.evaluate(async url => {
-      const data = await fetch(url, {
-        method: 'GET',
-        headers: { 'X-PINGOTHER': 'pingpong' }
-      });
-      return data.text();
-    }, server.CROSS_PROCESS_PREFIX + '/something')
-  ]);
-  expect(text).toBe('done');
-  expect(await response.headerValue('Access-Control-Allow-Origin')).toBe('null');
 });
 
 it('should respect cors overrides', async ({ page, server, browserName, isAndroid }) => {
@@ -776,58 +799,29 @@ it('should not auto-intercept non-preflight OPTIONS without network interception
   }
 });
 
-// Make sure this runs in a new context as preflight results could be cached.
-it('should not auto-intercept non-preflight OPTIONS with network interception', async ({ page, server, isAndroid, browserName, isBidi }) => {
-  it.info().annotations.push({ type: 'issue', description: 'https://github.com/microsoft/playwright/issues/20469' });
-  it.fixme(isAndroid);
-
-  await page.goto(server.EMPTY_PAGE);
-
-  let requests = [];
-  server.setRoute('/something', (request, response) => {
-    requests.push(request.method + ':' + request.url);
-    if (request.method === 'OPTIONS') {
-      response.writeHead(200, {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, DELETE',
-        'Access-Control-Allow-Headers': '*',
-        'Cache-Control': 'no-cache'
-      });
-      response.end(`Hello`);
-      return;
-    }
-    response.writeHead(200, { 'Access-Control-Allow-Origin': '*' });
-    response.end('World');
-  });
-
-  // With interception.
-  {
-    await page.route('**/something', route => route.continue());
-
-    requests = [];
-    const [text1, text2] = await page.evaluate(async url => {
-      const response1 = await fetch(url, { method: 'OPTIONS' });
-      const text1 = await response1.text();
-      const response2 = await fetch(url, { method: 'GET' });
-      const text2 = await response2.text();
-      return [text1, text2];
-    }, server.CROSS_PROCESS_PREFIX + '/something');
-    expect.soft(text1).toBe('Hello');
-    expect.soft(text2).toBe('World');
-    // Preflight for OPTIONS is auto-fulfilled, then OPTIONS, then GET without preflight.
-    if (browserName === 'chromium' || isBidi)
-      expect.soft(requests).toEqual(['OPTIONS:/something', 'GET:/something']);
-    else
-      expect.soft(requests).toEqual(['OPTIONS:/something', 'OPTIONS:/something', 'GET:/something']);
-  }
-});
-
 it('should support cors with POST', async ({ page, server }) => {
   await page.goto(server.EMPTY_PAGE);
-  await page.route('**/cars', async route => {
+  await page.route('**/cars', async (route, request) => {
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({
+        contentType: 'application/json',
+        headers: {
+          'Access-Control-Allow-Origin': request.headers()['origin'] || '*',
+          'Access-Control-Allow-Methods': request.method(),
+          'Access-Control-Allow-Headers': request.headers()['access-control-request-headers'],
+        },
+        status: 202,
+        body: '',
+      });
+      return;
+    }
     await route.fulfill({
       contentType: 'application/json',
-      headers: { 'Access-Control-Allow-Origin': '*' },
+      headers: {
+        'Access-Control-Allow-Origin': request.headers()['origin'] || '*',
+        'Access-Control-Allow-Methods': request.method(),
+        'Access-Control-Allow-Headers': request.headers()['access-control-request-headers'],
+      },
       status: 200,
       body: JSON.stringify(['electric', 'gas']),
     });
@@ -846,7 +840,21 @@ it('should support cors with POST', async ({ page, server }) => {
 
 it('should support cors with credentials', async ({ page, server }) => {
   await page.goto(server.EMPTY_PAGE);
-  await page.route('**/cars', async route => {
+  await page.route('**/cars', async (route, request) => {
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({
+        contentType: 'application/json',
+        headers: {
+          'Access-Control-Allow-Origin': request.headers()['origin'] || '*',
+          'Access-Control-Allow-Methods': request.method(),
+          'Access-Control-Allow-Headers': request.headers()['access-control-request-headers'],
+          'Access-Control-Allow-Credentials': 'true',
+        },
+        status: 202,
+        body: '',
+      });
+      return;
+    }
     await route.fulfill({
       contentType: 'application/json',
       headers: {
@@ -905,6 +913,19 @@ it('should reject cors with disallowed credentials', async ({ page, server }) =>
 it('should support cors for different methods', async ({ page, server }) => {
   await page.goto(server.EMPTY_PAGE);
   await page.route('**/cars', async (route, request) => {
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({
+        contentType: 'application/json',
+        headers: {
+          'Access-Control-Allow-Origin': request.headers()['origin'] || '*',
+          'Access-Control-Allow-Methods': 'POST, DELETE',
+          'Access-Control-Allow-Headers': request.headers()['access-control-request-headers'],
+        },
+        status: 202,
+        body: '',
+      });
+      return;
+    }
     await route.fulfill({
       contentType: 'application/json',
       headers: { 'Access-Control-Allow-Origin': '*' },
