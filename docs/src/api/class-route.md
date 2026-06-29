@@ -148,7 +148,9 @@ If set changes the post data of request.
 
 ### option: Route.continue.headers
 * since: v1.8
-- `headers` <[Object]<[string], [string]>>
+- `headers` <[Array]<[Object]>|[Object]<[string], [string]>>
+  - `name` <[string]> Name of the header.
+  - `value` <[string]> Value of the header.
 
 If set changes the request HTTP headers. Header values will be converted to a string.
 
@@ -435,7 +437,9 @@ If set changes the post data of request.
 
 ### option: Route.fallback.headers
 * since: v1.23
-- `headers` <[Object]<[string], [string]>>
+- `headers` <[Array]<[Object]>|[Object]<[string], [string]>>
+  - `name` <[string]> Name of the header.
+  - `value` <[string]> Value of the header.
 
 If set changes the request HTTP headers. Header values will be converted to a string.
 
@@ -559,7 +563,9 @@ If set changes the post data of request.
 
 ### option: Route.fetch.headers
 * since: v1.29
-- `headers` <[Object]<[string], [string]>>
+- `headers` <[Array]<[Object]>|[Object]<[string], [string]>>
+  - `name` <[string]> Name of the header.
+  - `value` <[string]> Value of the header.
 
 If set changes the request HTTP headers. Header values will be converted to a string.
 
@@ -645,7 +651,9 @@ Response status code, defaults to `200`.
 
 ### option: Route.fulfill.headers
 * since: v1.8
-- `headers` <[Object]<[string], [string]>>
+- `headers` <[Array]<[Object]>|[Object]<[string], [string]>>
+  - `name` <[string]> Name of the header.
+  - `value` <[string]> Value of the header.
 
 Response headers. Header values will be converted to a string.
 

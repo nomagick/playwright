@@ -4173,7 +4173,9 @@ The extra HTTP headers will be sent with every request the page initiates.
 
 ### param: Page.setExtraHTTPHeaders.headers
 * since: v1.8
-- `headers` <[Object]<[string], [string]>>
+- `headers` <[Array]<[Object]>|[Object]<[string], [string]>>
+  - `name` <[string]> Name of the header.
+  - `value` <[string]> Value of the header.
 
 An object containing additional HTTP headers to be sent with every request. All header values must be strings.
 

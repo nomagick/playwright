@@ -4455,7 +4455,17 @@ export interface Page {
    *
    * @param headers An object containing additional HTTP headers to be sent with every request. All header values must be strings.
    */
-  setExtraHTTPHeaders(headers: { [key: string]: string; }): Promise<void>;
+  setExtraHTTPHeaders(headers: ReadonlyArray<{
+    /**
+     * Name of the header.
+     */
+    name: string;
+
+    /**
+     * Value of the header.
+     */
+    value: string;
+  }>|{ [key: string]: string; }): Promise<void>;
 
   /**
    * **NOTE** Use locator-based
@@ -9727,7 +9737,17 @@ export interface BrowserContext {
    *
    * @param headers An object containing additional HTTP headers to be sent with every request. All header values must be strings.
    */
-  setExtraHTTPHeaders(headers: { [key: string]: string; }): Promise<void>;
+  setExtraHTTPHeaders(headers: ReadonlyArray<{
+    /**
+     * Name of the header.
+     */
+    name: string;
+
+    /**
+     * Value of the header.
+     */
+    value: string;
+  }>|{ [key: string]: string; }): Promise<void>;
 
   /**
    * Sets the context's geolocation. Passing `null` or `undefined` emulates position unavailable.
@@ -21040,7 +21060,17 @@ export interface Route {
     /**
      * If set changes the request HTTP headers. Header values will be converted to a string.
      */
-    headers?: { [key: string]: string; };
+    headers?: Array<{
+      /**
+       * Name of the header.
+       */
+      name: string;
+
+      /**
+       * Value of the header.
+       */
+      value: string;
+    }>|{ [key: string]: string; };
 
     /**
      * If set changes the request method (e.g. GET or POST).
@@ -21133,7 +21163,17 @@ export interface Route {
     /**
      * If set changes the request HTTP headers. Header values will be converted to a string.
      */
-    headers?: { [key: string]: string; };
+    headers?: Array<{
+      /**
+       * Name of the header.
+       */
+      name: string;
+
+      /**
+       * Value of the header.
+       */
+      value: string;
+    }>|{ [key: string]: string; };
 
     /**
      * If set changes the request method (e.g. GET or POST).
@@ -21180,7 +21220,17 @@ export interface Route {
     /**
      * If set changes the request HTTP headers. Header values will be converted to a string.
      */
-    headers?: { [key: string]: string; };
+    headers?: Array<{
+      /**
+       * Name of the header.
+       */
+      name: string;
+
+      /**
+       * Value of the header.
+       */
+      value: string;
+    }>|{ [key: string]: string; };
 
     /**
      * Maximum number of request redirects that will be followed automatically. An error will be thrown if the number is
@@ -21256,7 +21306,17 @@ export interface Route {
     /**
      * Response headers. Header values will be converted to a string.
      */
-    headers?: { [key: string]: string; };
+    headers?: Array<{
+      /**
+       * Name of the header.
+       */
+      name: string;
+
+      /**
+       * Value of the header.
+       */
+      value: string;
+    }>|{ [key: string]: string; };
 
     /**
      * JSON response. This method will set the content type to `application/json` if not set.
