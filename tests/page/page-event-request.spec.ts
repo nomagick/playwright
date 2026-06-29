@@ -337,7 +337,7 @@ it('should not expose preflight OPTIONS request', {
   ]);
 });
 
-it('should not expose preflight OPTIONS request with network interception', {
+it('should expose preflight OPTIONS request with network interception', {
   annotation: { type: 'issue', description: 'https://github.com/microsoft/playwright/issues/36311' }
 }, async ({ page, server, browserName, isBidi }) => {
   const serverRequests = [];
@@ -373,10 +373,11 @@ it('should not expose preflight OPTIONS request with network interception', {
   }, server.CROSS_PROCESS_PREFIX + '/cors').catch(() => {});
   expect(response).toBe('Hello there!');
   expect.soft(serverRequests).toEqual([
-    ...(browserName === 'chromium' || isBidi ? [] : ['OPTIONS /cors']),
+    'OPTIONS /cors',
     'POST /cors',
   ]);
   expect.soft(clientRequests).toEqual([
+    `OPTIONS ${server.CROSS_PROCESS_PREFIX}/cors`,
     `POST ${server.CROSS_PROCESS_PREFIX}/cors`,
   ]);
 });
