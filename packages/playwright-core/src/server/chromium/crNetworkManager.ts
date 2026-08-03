@@ -261,6 +261,24 @@ export class CRNetworkManager {
       this._onRequest(requestWillBeSentEvent.sessionInfo, requestWillBeSentEvent.event, sessionInfo, event);
       this._requestIdToRequestWillBeSentEvent.delete(requestId);
     } else {
+      const existingRequest = this._requestIdToRequest.get(requestId);
+      const alreadyContinuedParams = existingRequest?._route?._alreadyContinuedParams;
+      if (alreadyContinuedParams) {
+        // Sometimes Chromium network stack restarts the request internally.
+        // For example, when no-cors request hits a "less public address space", it should be resent with cors.
+        // There are some more examples here: https://source.chromium.org/chromium/chromium/src/+/main:services/network/url_loader.cc;l=1205-1234;drc=d5dd931e0ad3d9ffe74888ec62a3cc106efd7ea6
+        // There are probably even more cases deep inside the network stack.
+        //
+        // Anyway, in this case, continue the request in the same way as before, and it should go through.
+        //
+        // Note: make sure not to prematurely continue the redirect, which shares the
+        // `networkId` between the original request and the redirect.
+        sessionInfo.session._sendMayFail('Fetch.continueRequest', {
+          ...alreadyContinuedParams,
+          requestId: event.requestId,
+        });
+        return;
+      }
       this._requestIdToRequestPausedEvent.set(requestId, { sessionInfo, event });
     }
   }
@@ -314,6 +332,7 @@ export class CRNetworkManager {
       frame: frame || null,
       serviceWorker: this._serviceWorker || null,
       documentId,
+      route,
       requestWillBeSentEvent,
       requestPausedEvent,
       redirectedFrom,
@@ -517,6 +536,7 @@ class InterceptableRequest {
   readonly _documentId: string | undefined;
   readonly _timestamp: number;
   readonly _wallTime: number;
+  readonly _route: RouteImpl | undefined;
   session: CRSession;
 
   private static from(request: network.Request): InterceptableRequest | undefined {
@@ -543,6 +563,9 @@ class InterceptableRequest {
       if (response.body || !expectedLength)
         return Buffer.from(response.body, response.base64Encoded ? 'base64' : 'utf8');
 
+      // Make sure no network requests sent while reading the body for fulfilled requests.
+      if (interceptable._route?._fulfilled)
+        return Buffer.from('');
       // For <link prefetch we are going to receive empty body with non-empty content-length expectation. Reach out for the actual content.
       const resource = await session.send('Network.loadNetworkResource', { url: request.url(), frameId: request.serviceWorker() ? undefined : request.frame()!._id, options: { disableCache: false, includeCredentials: true } });
       const chunks: Buffer[] = [];
@@ -564,17 +587,19 @@ class InterceptableRequest {
     frame: frames.Frame | null;
     serviceWorker: CRServiceWorker | null;
     documentId?: string;
+    route: RouteImpl | null;
     requestWillBeSentEvent: Protocol.Network.requestWillBeSentPayload;
     requestPausedEvent: Protocol.Fetch.requestPausedPayload | undefined;
     redirectedFrom: InterceptableRequest | null;
   }) {
-    const { session, context, frame, documentId, requestWillBeSentEvent, requestPausedEvent, redirectedFrom, serviceWorker } = options;
+    const { session, context, frame, documentId, route, requestWillBeSentEvent, requestPausedEvent, redirectedFrom, serviceWorker } = options;
     this.session = session;
     this._timestamp = requestWillBeSentEvent.timestamp;
     this._wallTime = requestWillBeSentEvent.wallTime;
     this._requestId = requestWillBeSentEvent.requestId;
     this._interceptionId = requestPausedEvent && requestPausedEvent.requestId;
     this._documentId = documentId;
+    this._route = route ?? undefined;
 
     const {
       headers,
