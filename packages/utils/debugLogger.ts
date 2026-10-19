@@ -69,11 +69,31 @@ class DebugLogger {
 export const debugLogger = new DebugLogger();
 
 const kLogCount = 150;
+// Fork: browser stderr lines can be huge (headless Chromium echoes every page console
+// message as an INFO:CONSOLE line), so cap what we keep for diagnostics.
+export const kMaxRecentLogLength = 4096;
+
+// Fork: returns a capped copy that shares no memory with |message|. Lines coming from
+// readline are often V8 sliced strings of a multi-megabyte chunk; keeping even a short
+// substring of them would keep the whole chunk alive, so we always round-trip through
+// a Buffer to force a fresh flat string.
+function cappedLogCopy(message: string): string {
+  if (message.length <= kMaxRecentLogLength)
+    return Buffer.from(message).toString();
+  let keep = kMaxRecentLogLength;
+  // Do not split a surrogate pair.
+  const lastCode = message.charCodeAt(keep - 1);
+  if (lastCode >= 0xD800 && lastCode <= 0xDBFF)
+    keep--;
+  return Buffer.from(message.substring(0, keep)).toString() + `... [${message.length - keep} chars truncated]`;
+}
+
 export class RecentLogsCollector {
   private _logs: string[] = [];
   private _listeners: ((log: string) => void)[] = [];
 
   log(message: string) {
+    message = cappedLogCopy(message);
     this._logs.push(message);
     if (this._logs.length === kLogCount * 2)
       this._logs.splice(0, kLogCount);

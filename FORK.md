@@ -178,6 +178,29 @@ independent of the CORS/redirect changes — it could stand alone.
 
 **Test contract:** header-array variants in the fulfill/continue/fetch specs.
 
+### 7. Browser stderr log lines are capped in `RecentLogsCollector`
+
+**What:** Each line kept for diagnostics (launch-failure and browser-disconnected
+logs) is capped at `kMaxRecentLogLength` (4096 chars) with a
+`... [N chars truncated]` marker, and is always stored as a fresh copy
+(round-tripped through `Buffer`). `onMessage` listeners get the capped copy.
+
+**Why:** Headless Chromium echoes every page console message to stderr as an
+`INFO:CONSOLE` line. Multi-MB `console.*` payloads made the collector retain up to
+300 such lines per browser, exhausting the Node heap. readline hands out V8 sliced
+strings of its (possibly huge) input buffer, so even short or `substring()`-ed lines
+must be copied to let the original buffer be collected.
+
+**Symbols / files:**
+- `packages/utils/debugLogger.ts` → `RecentLogsCollector.log()`, `cappedLogCopy()`,
+  `kMaxRecentLogLength`.
+
+**Not covered:** `Page._consoleMessages` (server `page.ts`) still keeps the last 200
+console messages per page in full; call `page.clearConsoleMessages()` or close the
+page to release them.
+
+**Test contract:** `tests/library/unit/recent-logs-collector.spec.ts`.
+
 ---
 
 ## Maintaining the fork
