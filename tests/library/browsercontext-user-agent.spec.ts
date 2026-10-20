@@ -193,6 +193,24 @@ it('should derive the userAgentMetadata fields that are not given from userAgent
   await context.close();
 });
 
+it('should keep the brands in workers when only userAgent is set', async ({ browserName, browser, server }) => {
+  it.skip(browserName !== 'chromium', 'This API is Chromium-only');
+
+  server.setRoute('/brands-worker.js', (req, res) => {
+    res.writeHead(200, { 'content-type': 'text/javascript' });
+    res.end(`postMessage(navigator.userAgentData.toJSON());`);
+  });
+  const context = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36' });
+  const page = await context.newPage();
+  await page.goto(server.EMPTY_PAGE);
+  const pageData = await page.evaluate(() => (navigator as any).userAgentData.toJSON());
+  expect(pageData.brands.length).toBeGreaterThan(0);
+  expect(await page.evaluate(() => new Promise(r => {
+    new Worker('/brands-worker.js').onmessage = e => r(e.data);
+  }))).toEqual(pageData);
+  await context.close();
+});
+
 it('should throw for userAgentMetadata without userAgent', async ({ browser }) => {
   const error = await browser.newContext({ userAgentMetadata: { platform: 'Linux' } }).catch(e => e);
   expect(error.message).toContain('"userAgentMetadata" option requires "userAgent"');

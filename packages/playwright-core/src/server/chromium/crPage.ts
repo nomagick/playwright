@@ -1244,10 +1244,13 @@ export function calculateUserAgentMetadata(options: types.BrowserContextOptions)
 // commands on a session run in order, so nothing has to be awaited.
 export function emulateContextInWorker(session: CRSession, options: types.BrowserContextOptions) {
   if (options.userAgent || options.locale) {
+    const userAgentMetadata = calculateUserAgentMetadata(options);
     session._sendMayFail('Emulation.setUserAgentOverride', {
       userAgent: options.userAgent || '',
       acceptLanguage: options.locale,
-      userAgentMetadata: calculateUserAgentMetadata(options),
+      // Chrome fills in the brands this leaves out for pages, but not for workers, which would report none. Without
+      // brands, leave it to what workers get otherwise: dedicated workers inherit it from their page.
+      userAgentMetadata: userAgentMetadata?.brands ? userAgentMetadata : undefined,
     });
   }
   if (options.locale)
