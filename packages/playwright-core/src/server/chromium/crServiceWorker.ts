@@ -34,6 +34,9 @@ export class CRServiceWorker extends Worker {
   constructor(browserContext: CRBrowserContext, session: CRSession, url: string) {
     super(browserContext, url);
     this._session = session;
+    // rebrowser-patches: lets Worker create the context on demand
+    this._rebrowserSession = session;
+    this._rebrowserTargetId = 'serviceworker';
     this.browserContext = browserContext;
     if (!process.env.PLAYWRIGHT_DISABLE_SERVICE_WORKER_NETWORK)
       this._networkManager = new CRNetworkManager(null, this);
@@ -66,7 +69,8 @@ export class CRServiceWorker extends Worker {
       this.browserContext.emit(BrowserContext.Events.Console, message);
     });
 
-    session.send('Runtime.enable', {}).catch(e => {});
+    if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] === '0')
+      session.send('Runtime.enable', {}).catch(e => {});
     session.send('Runtime.runIfWaitingForDebugger').catch(e => {});
     session.on('Inspector.targetReloadedAfterCrash', () => {
       // Resume service worker after restart.

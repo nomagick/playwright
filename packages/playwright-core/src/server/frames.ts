@@ -35,7 +35,7 @@ import { helper } from './helper';
 import { SdkObject } from './instrumentation';
 import * as js from './javascript';
 import * as network from './network';
-import { Page, ariaSnapshotForFrame } from './page';
+import { Page, PageBinding, ariaSnapshotForFrame } from './page';
 import { isAbortError, nullProgress, ProgressController, raceUncancellableOperationWithCleanup } from './progress';
 import * as types from './types';
 import { isSessionClosedError } from './protocolError';
@@ -262,6 +262,22 @@ export class FrameManager {
       frame._currentDocument = { documentId, request: undefined };
     }
 
+    // rebrowser-patches: there are no Runtime events, so drop this frame's old contexts when a new document commits
+    if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' && frame._rebrowserSession()) {
+      frame._rebrowserDropContexts();
+      // and add the page binding again: Chrome drops it on navigation without Runtime.enable (crbug.com/382473087).
+      // A binding only reaches contexts that exist when it is added, and without Runtime.enable Chrome creates the
+      // main world lazily (a page without scripts may never get one), so create it first by resolving the document
+      // there. That runs nothing in the page, and calls made before the binding lands wait for it (see
+      // bindingsControllerSource). No binding-handshake fallback here: if another navigation wins, it re-adds.
+      // Add it to that context only, so it doesn't land again on other frames' windows, where it was captured
+      // already (see rebrowserCaptureBinding).
+      if (this._page.browserContext.needsPlaywrightBinding()) {
+        const session = frame._rebrowserSession();
+        session.__re__getMainWorldIdByObject({ client: session, frameId: frame._id, isWorker: false }).catch(() => undefined)
+            .then((executionContextId: number | undefined) => session.send('Runtime.addBinding', executionContextId ? { name: PageBinding.kBindingName, executionContextId } : { name: PageBinding.kBindingName })).catch(() => {});
+      }
+    }
     frame._onClearLifecycle();
     const navigationEvent: NavigationEvent = { url, name, newDocument: frame._currentDocument, isPublic: true };
     this._fireInternalFrameNavigation(frame, navigationEvent);
@@ -523,6 +539,8 @@ export class Frame extends SdkObject<FrameEventMap> {
   private _parentFrame: Frame | null;
   _url = '';
   private _contextData = new Map<types.World, ContextData>();
+  // rebrowser-patches: in-flight context acquisitions, keyed by world, to dedupe concurrent callers
+  private _rebrowserAcquiring = new Map<types.World, Promise<void>>();
   private _childFrames = new Set<Frame>();
   _name = '';
   _inflightRequests = new Set<network.Request>();
@@ -784,14 +802,51 @@ export class Frame extends SdkObject<FrameEventMap> {
     return await progress.race(this._page.delegate.getFrameElement(this));
   }
 
-  context(world: types.World): Promise<dom.FrameExecutionContext> {
+  // rebrowser-patches: destroy the contexts of this frame only (not the whole session)
+  _rebrowserDropContexts() {
+    for (const data of this._contextData.values()) {
+      if (data.context)
+        this.contextDestroyed(data.context);
+    }
+  }
+
+  // rebrowser-patches: CDP session of this frame, only for Chromium pages
+  _rebrowserSession(): any {
+    const delegate: any = this._page.delegate;
+    if (!delegate?._sessions)
+      return undefined;
+    return (delegate._sessions.get(this._id) || delegate._mainFrameSession)?._client;
+  }
+
+  context(world: types.World, useContextPromise = false): Promise<dom.FrameExecutionContext> {
     if (this._page.delegate.noUtilityWorld?.())
       world = 'main';
-    return this._contextData.get(world)!.contextPromise.then(contextOrDestroyedReason => {
-      if (contextOrDestroyedReason instanceof js.ExecutionContext)
-        return contextOrDestroyedReason;
-      throw new Error(contextOrDestroyedReason.destroyedReason);
-    });
+    const session = process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' ? this._rebrowserSession() : undefined;
+    if (!session || this._contextData.get(world)!.context || useContextPromise) {
+      return this._contextData.get(world)!.contextPromise.then(contextOrDestroyedReason => {
+        if (contextOrDestroyedReason instanceof js.ExecutionContext)
+          return contextOrDestroyedReason;
+        throw new Error(contextOrDestroyedReason.destroyedReason);
+      });
+    }
+
+    // rebrowser-patches: create the context on demand instead of waiting for Runtime events.
+    // Dedupe concurrent callers so parallel evaluate() calls don't each create (and destroy) a world.
+    if (!this._rebrowserAcquiring.has(world)) {
+      const acquiring = session.__re__emitExecutionContext({
+        world,
+        targetId: this._id,
+        frame: this,
+      }).catch((error: Error) => {
+        if (error.message.includes('No frame for given id found'))
+          throw new Error('Frame was detached');
+        throw error;
+      }).finally(() => {
+        this._rebrowserAcquiring.delete(world);
+      });
+      this._rebrowserAcquiring.set(world, acquiring);
+    }
+    return this._rebrowserAcquiring.get(world)!.then(() => this.context(world, true));
   }
 
   mainContext(): Promise<dom.FrameExecutionContext> {
@@ -965,6 +1020,34 @@ export class Frame extends SdkObject<FrameEventMap> {
       const waitUntil = options.waitUntil === undefined ? 'load' : options.waitUntil;
       progress.log(`setting frame content, waiting until "${waitUntil}"`);
       const context = await progress.race(this.utilityContext());
+      const rebrowserSession = process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' ? this._rebrowserSession() : undefined;
+      if (rebrowserSession) {
+        // rebrowser-patches: the console tag below needs Runtime.enable, use Page.documentOpened instead
+        const openedPromise = new ManualPromise<void>();
+        const onDocumentOpened = (event: { frame: { id: string } }) => {
+          if (event.frame.id !== this._id)
+            return;
+          rebrowserSession.off('Page.documentOpened', onDocumentOpened);
+          // Clear lifecycle right after document.open(), same as the console tag does.
+          this._onClearLifecycle();
+          openedPromise.resolve();
+        };
+        rebrowserSession.on('Page.documentOpened', onDocumentOpened);
+        try {
+          progress.setAllowConcurrentOrNestedRaces(true);
+          const lifecyclePromise = progress.race(openedPromise).then(() => this.waitForLoadState(progress, waitUntil));
+          const contentPromise = progress.race(context.evaluate(({ html }) => {
+            document.open();
+            document.write(html);
+            document.close();
+          }, { html }));
+          await Promise.all([contentPromise, lifecyclePromise]);
+          progress.setAllowConcurrentOrNestedRaces(false);
+        } finally {
+          rebrowserSession.off('Page.documentOpened', onDocumentOpened);
+        }
+        return null;
+      }
       const tagPromise = new ManualPromise<void>();
       this._page.frameManager._consoleMessageTags.set(tag, () => {
         // Clear lifecycle right after document.open() - see 'tag' below.

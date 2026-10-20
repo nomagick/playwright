@@ -106,6 +106,10 @@ export class CRConnection extends SdkObject {
 
 type SessionEventListener = (method: string, params?: Object) => void;
 
+// rebrowser-patches: isolated world used to look up main-world context ids; one random name per process
+const rebrowserLookupWorldName = [...Array(Math.floor(Math.random() * (10 + 1)) + 10)].map(() => Math.random().toString(36)[2]).join('');
+let rebrowserFallbackWarned = false;
+
 export class CRSession extends SdkObject<Protocol.EventMap & ConnectionEventMap> {
   private readonly _connection: CRConnection;
   private _eventListener?: SessionEventListener;
@@ -199,6 +203,161 @@ export class CRSession extends SdkObject<Protocol.EventMap & ConnectionEventMap>
       callback.reject(callback.error);
     }
     this._callbacks.clear();
+  }
+
+  async __re__emitExecutionContext({
+    world,
+    targetId,
+    frame = null
+  }: any) {
+    const fixMode = process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] || 'addBinding';
+    // the name Playwright expects for its utility world (see CRPage.utilityWorldName), workers have no utility world
+    const utilityWorldName = frame?._page?.delegate?.utilityWorldName || 'util';
+    process.env['REBROWSER_PATCHES_DEBUG'] && console.log(`[rebrowser-patches][crSession] targetId = ${targetId}, world = ${world}, frame = ${frame ? 'Y' : 'N'}, fixMode = ${fixMode}`);
+
+    let contextPayload;
+    if (world === 'utility') {
+      // both modes: a real isolated world with the utility name
+      const contextId = await this.__re__getIsolatedWorld({ client: this, frameId: targetId, worldName: utilityWorldName });
+      contextPayload = { id: contextId, name: utilityWorldName, auxData: { frameId: targetId, isDefault: false } };
+    } else if (fixMode === 'alwaysIsolated' && frame) {
+      // main world requested: give an isolated world that looks like the main one
+      const contextId = await this.__re__getIsolatedWorld({ client: this, frameId: targetId, worldName: utilityWorldName });
+      contextPayload = { id: contextId, name: '', auxData: { frameId: targetId, isDefault: true } };
+    } else {
+      // addBinding mode, and workers in every mode (workers have no isolated worlds)
+      const contextId = await this.__re__getMainWorld({ client: this, frameId: targetId, isWorker: frame === null });
+      contextPayload = { id: contextId, name: '', auxData: { frameId: targetId, isDefault: true } };
+    }
+    if (!contextPayload.id)
+      throw new Error('[rebrowser-patches] cannot get execution context id');
+
+    this.emit('Runtime.executionContextCreated', {
+      context: contextPayload as any
+    });
+  }
+  async __re__getMainWorld({ client, frameId, isWorker = false }: any) {
+    // rebrowser-patches: learn the main world's context id without running anything in the page, so there is
+    // nothing for page scripts to notice. Only if that fails (e.g. Chrome changes its object id format), fall back to
+    // the binding handshake.
+    try {
+      const contextId = await this.__re__getMainWorldIdByObject({ client, frameId, isWorker });
+      if (contextId)
+        return contextId;
+    } catch (error) {
+      process.env['REBROWSER_PATCHES_DEBUG'] && console.log('[rebrowser-patches][getMainWorld] object lookup failed, using a binding:', error);
+    }
+    if (!rebrowserFallbackWarned) {
+      rebrowserFallbackWarned = true;
+      console.warn('[rebrowser-patches] could not look up the page\'s context id without touching the page; falling back to a binding handshake that page scripts can notice. Please report this with your Chrome version. REBROWSER_PATCHES_RUNTIME_FIX_MODE=alwaysIsolated avoids it.');
+    }
+    return this.__re__getMainWorldByBinding({ client, frameId, isWorker });
+  }
+  // A worker evaluates `this` in its only context. A frame reads `document` in an isolated world and resolves that
+  // node again without a context, which lands in the frame's main world. Either way the remote object id is
+  // "<isolate>.<contextId>.<id>".
+  async __re__getMainWorldIdByObject({ client, frameId, isWorker }: any) {
+    const objectGroup = 'g' + Math.random().toString(36).slice(2);
+    let objectId: string | undefined;
+    try {
+      if (isWorker) {
+        objectId = (await client.send('Runtime.evaluate', { expression: 'this', objectGroup })).result.objectId;
+      } else {
+        const { executionContextId } = await client.send('Page.createIsolatedWorld', { frameId, worldName: rebrowserLookupWorldName, grantUniveralAccess: true });
+        const { result } = await client.send('Runtime.evaluate', { expression: 'document', contextId: executionContextId, objectGroup });
+        const { node } = await client.send('DOM.describeNode', { objectId: result.objectId });
+        objectId = (await client.send('DOM.resolveNode', { backendNodeId: node.backendNodeId, objectGroup })).object.objectId;
+      }
+    } finally {
+      client.send('Runtime.releaseObjectGroup', { objectGroup }).catch(() => {});
+    }
+    const match = /^-?\d+\.(\d+)\.\d+$/.exec(objectId || '');
+    process.env['REBROWSER_PATCHES_DEBUG'] && console.log(`[rebrowser-patches][getMainWorldIdByObject] frameId = ${frameId}, objectId = ${objectId}`);
+    return match ? Number(match[1]) : undefined;
+  }
+  async __re__getMainWorldByBinding({ client, frameId, isWorker = false }: any) {
+    let contextId: any;
+    let identifier: any;
+
+    // random name to make it harder to detect for any 3rd party script by watching window object and events
+    const randomName = [...Array(Math.floor(Math.random() * (10 + 1)) + 10)].map(() => Math.random().toString(36)[2]).join('');
+    process.env['REBROWSER_PATCHES_DEBUG'] && console.log(`[rebrowser-patches][getMainWorld] binding name = ${randomName}`);
+
+    // add the binding
+    await client.send('Runtime.addBinding', {
+      name: randomName,
+    });
+
+    // listen for 'Runtime.bindingCalled' event
+    const bindingCalledHandler = ({ name, payload, executionContextId }: any) => {
+      process.env['REBROWSER_PATCHES_DEBUG'] && console.log('[rebrowser-patches][bindingCalledHandler]', {
+        name,
+        payload,
+        executionContextId
+      });
+      if (contextId > 0) {
+        // already acquired the id
+        return;
+      }
+      if (name !== randomName) {
+        // ignore irrelevant bindings
+        return;
+      }
+      if (payload !== frameId) {
+        // ignore irrelevant frames
+        return;
+      }
+      contextId = executionContextId;
+      // remove this listener
+      client.off('Runtime.bindingCalled', bindingCalledHandler);
+    };
+    client.on('Runtime.bindingCalled', bindingCalledHandler);
+
+    if (isWorker) {
+      // workers don't support `Page.addScriptToEvaluateOnNewDocument` and `Page.createIsolatedWorld`, but there are no iframes inside of them, so it's safe to just use Runtime.evaluate
+      await client.send('Runtime.evaluate', {
+        expression: `this['${randomName}']('${frameId}')`,
+      });
+    } else {
+      // we could call the binding right from `addScriptToEvaluateOnNewDocument`, but this way it will be called in all existing frames and it's hard to distinguish children from the parent
+      ({ identifier } = await client.send('Page.addScriptToEvaluateOnNewDocument', {
+        // use `window`, not `self`: pages can reassign `self` (or make it throw, e.g. LavaMoat scuttling), `window` is unforgeable
+        source: `document.addEventListener('${randomName}', (e) => window['${randomName}'](e.detail.frameId))`,
+        runImmediately: true,
+      }));
+
+      // create new isolated world for this frame
+      const createIsolatedWorldResult = await client.send('Page.createIsolatedWorld', {
+        frameId,
+        // use randomName for worldName to distinguish from normal utility world
+        worldName: randomName,
+        grantUniveralAccess: true,
+      });
+
+      // emit event in the specific frame from the isolated world
+      await client.send('Runtime.evaluate', {
+        expression: `document.dispatchEvent(new CustomEvent('${randomName}', { detail: { frameId: '${frameId}' } }))`,
+        contextId: createIsolatedWorldResult.executionContextId,
+      });
+    }
+
+    process.env['REBROWSER_PATCHES_DEBUG'] && console.log(`[rebrowser-patches][getMainWorld] result:`, { contextId });
+    // don't leave the handshake behind: a native function with a random name on the global object is easy to spot
+    client.send('Runtime.removeBinding', { name: randomName }).catch(() => {});
+    if (contextId)
+      client.send('Runtime.evaluate', { expression: `delete this['${randomName}']`, contextId }).catch(() => {});
+    if (identifier)
+      client.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).catch(() => {});
+    return contextId;
+  }
+  async __re__getIsolatedWorld({ client, frameId, worldName }: any) {
+    const createIsolatedWorldResult = await client.send('Page.createIsolatedWorld', {
+      frameId,
+      worldName,
+      grantUniveralAccess: true,
+    });
+    process.env['REBROWSER_PATCHES_DEBUG'] && console.log(`[rebrowser-patches][getIsolatedWorld] result:`, createIsolatedWorldResult);
+    return createIsolatedWorldResult.executionContextId;
   }
 }
 

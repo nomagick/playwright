@@ -406,6 +406,21 @@ export class Chromium extends BrowserType {
       if (proxyBypassRules.length > 0)
         chromeArguments.push(`--proxy-bypass-list=${proxyBypassRules.join(';')}`);
     }
+    // rebrowser-patches: hide navigator.webdriver with --disable-blink-features=AutomationControlled,
+    // merged with the user's own --disable-blink-features, and drop the default switches pages can notice:
+    // popups opened without a click, history updates past 200 in 10 s and unpartitioned third-party storage.
+    // REBROWSER_PATCHES_WEBDRIVER_FIX=0 turns all of it off.
+    if (process.env['REBROWSER_PATCHES_WEBDRIVER_FIX'] !== '0') {
+      const featuresPrefix = '--disable-features=';
+      const patchedArguments = chromeArguments
+          .filter(arg => arg !== '--disable-ipc-flooding-protection' && arg !== '--disable-popup-blocking')
+          .map(arg => arg.startsWith(featuresPrefix) ? featuresPrefix + arg.substring(featuresPrefix.length).split(',').filter(f => f !== 'ThirdPartyStoragePartitioning').join(',') : arg);
+      const blinkPrefix = '--disable-blink-features=';
+      const userBlinkFeatures = args.filter(arg => arg.startsWith(blinkPrefix)).flatMap(arg => arg.substring(blinkPrefix.length).split(',')).map(f => f.trim()).filter(Boolean);
+      patchedArguments.push(blinkPrefix + [...new Set(['AutomationControlled', ...userBlinkFeatures])].join(','));
+      patchedArguments.push(...args.filter(arg => !arg.startsWith(blinkPrefix)));
+      return patchedArguments;
+    }
     chromeArguments.push(...args);
     return chromeArguments;
   }

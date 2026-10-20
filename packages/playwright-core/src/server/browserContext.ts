@@ -33,6 +33,7 @@ import { RecorderApp } from './recorder/recorderApp';
 import { Selectors } from './selectors';
 import { Tracing } from './trace/recorder/tracing';
 import * as rawStorageSource from '../generated/storageScriptSource';
+import { rebrowserRenameBindings } from './javascript';
 import { nullProgress } from './progress';
 
 import type { Browser, BrowserOptions } from './browser';
@@ -618,7 +619,7 @@ export abstract class BrowserContext<EM extends EventMap = EventMap> extends Sdk
 
     const collectScript = `(() => {
       const module = {};
-      ${rawStorageSource.source}
+      ${rebrowserRenameBindings(rawStorageSource.source)}
       const script = new (module.exports.StorageScript())(${this._browser.options.name === 'firefox'});
       return script.collect(${indexedDB});
     })()`;
@@ -703,7 +704,7 @@ export abstract class BrowserContext<EM extends EventMap = EventMap> extends Sdk
           await frame.gotoImpl(progress, origin, {});
           const restoreScript = `(() => {
             const module = {};
-            ${rawStorageSource.source}
+            ${rebrowserRenameBindings(rawStorageSource.source)}
             const script = new (module.exports.StorageScript())(${this._browser.options.name === 'firefox'});
             return script.restore(${JSON.stringify(newOrigins.get(origin))});
           })()`;

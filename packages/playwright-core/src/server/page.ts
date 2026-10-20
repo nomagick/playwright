@@ -17,7 +17,7 @@
 
 import { isInvalidSelectorError } from '@isomorphic/selectorParser';
 import { ManualPromise } from '@isomorphic/manualPromise';
-import { kBindingsControllerProperty, parseEvaluationResultValue } from '@isomorphic/utilityScriptSerializers';
+import { parseEvaluationResultValue } from '@isomorphic/utilityScriptSerializers';
 import { getComparator } from '@utils/comparators';
 import { debugLogger } from '@utils/debugLogger';
 import { LongStandingScope } from '@isomorphic/manualPromise';
@@ -993,6 +993,9 @@ export class Worker extends SdkObject<WorkerEventMap> {
   existingExecutionContext: js.ExecutionContext | null = null;
   readonly openScope = new LongStandingScope();
   _closeReason: string | undefined;
+  // rebrowser-patches: set for Chromium workers, used to create the context on demand
+  _rebrowserTargetId: string | undefined;
+  _rebrowserSession: any;
 
   constructor(parent: SdkObject, url: string, onDisconnect?: () => Promise<void>) {
     super(parent, 'worker');
@@ -1029,12 +1032,23 @@ export class Worker extends SdkObject<WorkerEventMap> {
     this.openScope.close(new Error('Worker closed'));
   }
 
+  // rebrowser-patches: there are no Runtime events, so create the context on demand
+  async getExecutionContext(): Promise<js.ExecutionContext> {
+    if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' && !this.existingExecutionContext && this._rebrowserSession) {
+      await this._rebrowserSession.__re__emitExecutionContext({
+        world: 'main',
+        targetId: this._rebrowserTargetId,
+      });
+    }
+    return this._executionContextPromise;
+  }
+
   async evaluateExpression(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any): Promise<any> {
-    return progress.race(js.evaluateExpression(await this._executionContextPromise, expression, { returnByValue: true, isFunction }, arg));
+    return progress.race(js.evaluateExpression(await progress.race(this.getExecutionContext()), expression, { returnByValue: true, isFunction }, arg));
   }
 
   async evaluateExpressionHandle(progress: Progress, expression: string, isFunction: boolean | undefined, arg: any): Promise<any> {
-    return progress.race(js.evaluateExpression(await this._executionContextPromise, expression, { returnByValue: false, isFunction }, arg));
+    return progress.race(js.evaluateExpression(await progress.race(this.getExecutionContext()), expression, { returnByValue: false, isFunction }, arg));
   }
 
   async disconnect(progress: Progress, options: { reason?: string } = {}) {
@@ -1045,17 +1059,86 @@ export class Worker extends SdkObject<WorkerEventMap> {
   }
 }
 
+// rebrowser-patches: without Runtime.enable, Chrome drops CDP bindings when the page navigates (crbug.com/382473087).
+// They are added again when the navigation commits, so a call made before that waits for the binding instead of
+// throwing. The binding itself never stays on the window: the controller captures it (see rebrowserCaptureBinding)
+// and calls it from there. REBROWSER_PATCHES_RUNTIME_FIX_MODE=0 keeps the original source.
+function bindingsControllerSource(): { source: string, capturesBinding: boolean } {
+  const source = js.rebrowserRenameBindings(rawBindingsControllerSource.source);
+  if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] === '0')
+    return { source, capturesBinding: false };
+  const call = '    this._global[this._globalBindingName](JSON.stringify(payload));\n';
+  const retry = [
+    '    const json = JSON.stringify(payload);',
+    '    const send = (tries) => {',
+    '      const binding = this._rebrowserBinding;',
+    '      if (typeof binding === "function")',
+    '        binding(json);',
+    '      else if (tries < 500)',
+    '        setTimeout(() => send(tries + 1), 10);',
+    '      else',
+    '        data.callbacks.get(seq)?.reject(new Error(`binding "${bindingName}" is not available`));',
+    '    };',
+    '    send(0);',
+    '',
+  ].join('\n');
+  // if upstream changes the generated shape, keep the original rather than half-patched code
+  if (source.split(call).length !== 2)
+    return { source, capturesBinding: false };
+  return { source: source.replace(call, () => retry), capturesBinding: true };
+}
+
+// rebrowser-patches: take the CDP binding off the window. If it is already there (bindings exposed into a live
+// document), take it right away. Otherwise it arrives later: Chrome adds it with a plain property set, so a setter
+// that is there first gets the function and the binding never lands on the window. The setter sits on the window's
+// prototype, not on the window, and removes itself once it has the binding.
+// The binding is re-added per context (see FrameManager.frameCommittedNewDocumentNavigation), so one capture each.
+function rebrowserCaptureBinding(controllerExpression: string, bindingName: string): string {
+  return `
+    (() => {
+      const controller = ${controllerExpression};
+      const name = ${JSON.stringify(bindingName)};
+      const existing = Object.getOwnPropertyDescriptor(globalThis, name);
+      if (existing && typeof existing.value === 'function') {
+        controller._rebrowserBinding = existing.value;
+        delete globalThis[name];
+        return;
+      }
+      const proto = Object.getPrototypeOf(globalThis);
+      Object.defineProperty(proto, name, {
+        configurable: true,
+        enumerable: false,
+        get() { return undefined; },
+        set(value) {
+          delete proto[name];
+          if (typeof value === 'function')
+            controller._rebrowserBinding = value;
+        },
+      });
+    })();`;
+}
+
 export class PageBinding extends DisposableObject {
-  static kBindingName = '__playwright__binding__';
+  // rebrowser-patches: random per process (see rebrowserBindingName)
+  static kBindingName = js.rebrowserBindingName;
 
   static createInitScript(browserContext: BrowserContext): InitScript {
+    const controllerSource = bindingsControllerSource();
     return new InitScript(browserContext, `
       (() => {
         const module = {};
-        ${rawBindingsControllerSource.source}
-        const property = '${kBindingsControllerProperty}';
-        if (!globalThis[property])
-          globalThis[property] = new (module.exports.BindingsController())(globalThis, '${PageBinding.kBindingName}');
+        ${controllerSource.source}
+        const property = '${js.rebrowserBindingsControllerProperty}';
+        if (!globalThis[property]) {
+          // rebrowser-patches: non-enumerable, so it doesn't show up when page scripts walk the window
+          Object.defineProperty(globalThis, property, {
+            value: new (module.exports.BindingsController())(globalThis, '${PageBinding.kBindingName}'),
+            configurable: true,
+            enumerable: false,
+            writable: true,
+          });
+          ${controllerSource.capturesBinding ? rebrowserCaptureBinding('globalThis[property]', PageBinding.kBindingName) : ''}
+        }
       })();
     `);
   }
@@ -1070,11 +1153,15 @@ export class PageBinding extends DisposableObject {
     super(parent);
     this.name = name;
     this.playwrightFunction = playwrightFunction;
-    this.initScript = new InitScript(parent, `globalThis['${kBindingsControllerProperty}'].addBinding(${JSON.stringify(name)}, ${!!noGlobal})`);
-    this.cleanupScript = `globalThis['${kBindingsControllerProperty}'].removeBinding(${JSON.stringify(name)})`;
+    this.initScript = new InitScript(parent, `globalThis['${js.rebrowserBindingsControllerProperty}'].addBinding(${JSON.stringify(name)}, ${!!noGlobal})`);
+    this.cleanupScript = `globalThis['${js.rebrowserBindingsControllerProperty}'].removeBinding(${JSON.stringify(name)})`;
   }
 
   static async dispatch(page: Page, payload: string, context: dom.FrameExecutionContext) {
+    if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' && !payload.includes('{')) {
+      // ignore as it's not a JSON but a string from addBinding method
+      return
+    }
     const { name, seq, serializedArgs } = JSON.parse(payload) as BindingPayload;
     try {
       assert(context.world);
@@ -1085,9 +1172,9 @@ export class PageBinding extends DisposableObject {
         throw new Error(`serializedArgs is not an array. This can happen when Array.prototype.toJSON is defined incorrectly`);
       const args = serializedArgs.map(a => parseEvaluationResultValue(a));
       const result = await binding.playwrightFunction({ frame: context.frame, page, context: page.browserContext }, ...args);
-      context.evaluateExpressionHandle(`arg => globalThis['${kBindingsControllerProperty}'].deliverBindingResult(arg)`, { isFunction: true }, { name, seq, result }).catch(e => debugLogger.log('error', e));
+      context.evaluateExpressionHandle(`arg => globalThis['${js.rebrowserBindingsControllerProperty}'].deliverBindingResult(arg)`, { isFunction: true }, { name, seq, result }).catch(e => debugLogger.log('error', e));
     } catch (error) {
-      context.evaluateExpressionHandle(`arg => globalThis['${kBindingsControllerProperty}'].deliverBindingResult(arg)`, { isFunction: true }, { name, seq, error }).catch(e => debugLogger.log('error', e));
+      context.evaluateExpressionHandle(`arg => globalThis['${js.rebrowserBindingsControllerProperty}'].deliverBindingResult(arg)`, { isFunction: true }, { name, seq, error }).catch(e => debugLogger.log('error', e));
     }
   }
 
@@ -1101,8 +1188,9 @@ export class InitScript extends DisposableObject {
 
   constructor(owner: BrowserContext | Page, source: string) {
     super(owner);
+    // rebrowser-patches: init scripts from the client may spell out the bindings controller name (function arguments)
     this.source = `(() => {
-      ${source}
+      ${js.rebrowserRenameBindings(source)}
     })();`;
   }
 

@@ -89,7 +89,8 @@ export class CRPage implements PageDelegate {
     this._page = new Page(this, browserContext);
     // Create a unique utility world for this Playwright instance, just in case there
     // are multiple instances of Playwright connected to the same browser page.
-    this.utilityWorldName = `__playwright_utility_world_${this._page.guid}`;
+    // rebrowser-patches: hide the utility world name, set REBROWSER_PATCHES_UTILITY_WORLD_NAME=0 to keep the original
+    this.utilityWorldName = process.env['REBROWSER_PATCHES_UTILITY_WORLD_NAME'] !== '0' ? (process.env['REBROWSER_PATCHES_UTILITY_WORLD_NAME'] || 'util') : `__playwright_utility_world_${this._page.guid}`;
     this._networkManager = new CRNetworkManager(this._page, null);
     // Sync any browser context state to the network manager. This does not talk over CDP because
     // we have not connected any sessions to the network manager yet.
@@ -504,7 +505,8 @@ class FrameSession {
       }),
       this._client.send('Log.enable', {}),
       lifecycleEventsEnabled = this._client.send('Page.setLifecycleEventsEnabled', { enabled: true }),
-      this._client.send('Runtime.enable', {}),
+      // rebrowser-patches: skip Runtime.enable
+      process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] === '0' ? this._client.send('Runtime.enable', {}) : Promise.resolve(),
       this._client.send('Page.addScriptToEvaluateOnNewDocument', {
         source: '',
         worldName: this._crPage.utilityWorldName,
@@ -731,6 +733,9 @@ class FrameSession {
 
     const url = event.targetInfo.url;
     const worker = new Worker(this._page, url);
+    // rebrowser-patches: keep the target id and session to create the execution context on demand
+    worker._rebrowserTargetId = event.targetInfo.targetId;
+    worker._rebrowserSession = session;
     this._page.addWorker(event.sessionId, worker);
     this._workerSessions.set(event.sessionId, session);
     session.once('Runtime.executionContextCreated', async event => {
@@ -740,8 +745,10 @@ class FrameSession {
       session.on('Inspector.workerScriptLoaded', () => worker.workerScriptLoaded());
     else
       worker.workerScriptLoaded();
-    // This might fail if the target is closed before we initialize.
-    session._sendMayFail('Runtime.enable');
+    if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] === '0') {
+      // This might fail if the target is closed before we initialize.
+      session._sendMayFail('Runtime.enable');
+    }
     this._crPage._networkManager.addSession(session, this._page.frameManager.frame(event.targetInfo.parentFrameId ?? this._targetId) ?? undefined).catch(() => {});
     session._sendMayFail('Runtime.runIfWaitingForDebugger');
     session._sendMayFail('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
@@ -820,7 +827,20 @@ class FrameSession {
   async _onBindingCalled(event: Protocol.Runtime.bindingCalledPayload) {
     const pageOrError = await this._crPage._page.waitForInitializedOrError();
     if (!(pageOrError instanceof Error)) {
-      const context = this._contextIdToContext.get(event.executionContextId);
+      let context = this._contextIdToContext.get(event.executionContextId);
+      // rebrowser-patches: without Runtime events a main world gets a context only when it is first used, so a
+      // binding call (JSON payload) may come from one we don't know yet. Create this session's main contexts on
+      // demand and look again.
+      if (!context && process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' && event.payload.startsWith('{')) {
+        for (const frame of this._page.frameManager.frames()) {
+          if (frame._rebrowserSession() !== this._client)
+            continue;
+          await frame.context('main').catch(() => {});
+          context = this._contextIdToContext.get(event.executionContextId);
+          if (context)
+            break;
+        }
+      }
       if (context)
         await this._page.onBindingCalled(event.payload, context);
     }

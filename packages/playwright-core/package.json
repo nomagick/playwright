@@ -1,6 +1,6 @@
 {
   "name": "@nomagick/playwright-core",
-  "version": "1.62.3",
+  "version": "1.62.4",
   "description": "A high-level API to automate web browsers",
   "repository": {
     "type": "git",

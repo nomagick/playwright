@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { serializeAsCallArgument } from '@isomorphic/utilityScriptSerializers';
+import { kBindingsControllerProperty, serializeAsCallArgument } from '@isomorphic/utilityScriptSerializers';
 import { LongStandingScope } from '@isomorphic/manualPromise';
 import { isUnderTest } from '@utils/debug';
 import { SdkObject } from './instrumentation';
@@ -53,6 +53,53 @@ export interface ExecutionContextDelegate {
   getProperties(object: JSHandle): Promise<Map<string, JSHandle>>;
   releaseHandle(handle: JSHandle): Promise<void>;
   shouldPrependErrorPrefix(): boolean;
+}
+
+// rebrowser-patches: Playwright's CDP binding (__playwright__binding__) and the global its bindings controller lives
+// in (__playwright__binding__controller__) have fixed names that page scripts can look up. Use random names picked
+// once per process instead. The binding name is only ever read from PageBinding.kBindingName; the controller name is
+// spelled out in the injected sources and in init scripts built by the client, so those go through
+// rebrowserRenameBindings() wherever they reach the page. REBROWSER_PATCHES_RUNTIME_FIX_MODE=0 keeps the originals.
+const rebrowserRenamesBindings = process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0';
+function rebrowserRandomName(): string {
+  const letters = 'abcdefghijklmnopqrstuvwxyz';
+  return [...Array(Math.floor(Math.random() * 11) + 10)].map(() => letters[Math.floor(Math.random() * letters.length)]).join('');
+}
+export const rebrowserBindingName = rebrowserRenamesBindings ? rebrowserRandomName() : '__playwright__binding__';
+export const rebrowserBindingsControllerProperty = rebrowserRenamesBindings ? rebrowserRandomName() : kBindingsControllerProperty;
+export function rebrowserRenameBindings(source: string): string {
+  if (!rebrowserRenamesBindings)
+    return source;
+  return source.split(kBindingsControllerProperty).join(rebrowserBindingsControllerProperty);
+}
+
+// rebrowser-patches: V8 names stack frames after the class binding, so a page calling `new Error().stack` from
+// inside an evaluate() sees "UtilityScript.evaluate". Rename the binding to a short name picked at random once per
+// process, and shift the script down by a random number of lines, so the frames carry no fixed name or position that
+// would identify the patch. REBROWSER_PATCHES_SOURCE_URL=0 keeps the original source.
+let rebrowserUtilityScriptName: string | undefined;
+const rebrowserUtilityScriptOffset = '\n'.repeat(Math.floor(Math.random() * 100));
+function utilityScriptSource(): string {
+  const source = rebrowserRenameBindings(rawUtilityScriptSource.source);
+  if (process.env['REBROWSER_PATCHES_SOURCE_URL'] === '0')
+    return source;
+  if (!rebrowserUtilityScriptName) {
+    const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const pick = () => letters[Math.floor(Math.random() * letters.length)];
+    for (let i = 0; i < 1000 && !rebrowserUtilityScriptName; i++) {
+      const name = pick() + (Math.random() < 0.5 ? '' : pick());
+      // skip keywords and any identifier the script already uses
+      if (['do', 'if', 'in'].includes(name) || new RegExp(`(^|[^\\w$.])${name}(?![\\w$])`).test(source))
+        continue;
+      rebrowserUtilityScriptName = name;
+    }
+  }
+  const name = rebrowserUtilityScriptName;
+  const renamed = source
+      .replace('var UtilityScript = class {', () => `var ${name} = class {`)
+      .replace('UtilityScript: () => UtilityScript', () => `UtilityScript: () => ${name}`);
+  // if upstream changes the generated shape, keep it working rather than half-renamed
+  return name && renamed.includes(`var ${name} = class {`) && renamed.includes(`UtilityScript: () => ${name}`) ? rebrowserUtilityScriptOffset + renamed : source;
 }
 
 export class ExecutionContext extends SdkObject {
@@ -109,7 +156,7 @@ export class ExecutionContext extends SdkObject {
       (() => {
         ${globalsSnapshot}
         const module = {};
-        ${rawUtilityScriptSource.source}
+        ${utilityScriptSource()}
         return new (module.exports.UtilityScript())(globalThis, ${isUnderTest()});
       })();`;
       this._utilityScriptPromise = this.raceAgainstContextDestroyed(this.delegate.rawEvaluateHandle(this, source))
