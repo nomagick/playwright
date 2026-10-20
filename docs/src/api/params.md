@@ -663,6 +663,27 @@ When using WebKit on macOS, accessing `localhost` will not pick up client certif
 
 Specific user agent to use in this context.
 
+## context-option-useragentmetadata
+* langs: js
+- `userAgentMetadata` <[Object]>
+  - `architecture` ?<[string]>
+  - `bitness` ?<[string]>
+  - `brands` ?<[Array]<[Object]>>
+    - `brand` <[string]>
+    - `version` <[string]>
+  - `formFactors` ?<[Array]<[string]>>
+  - `fullVersionList` ?<[Array]<[Object]>>
+    - `brand` <[string]>
+    - `version` <[string]>
+  - `mobile` ?<[boolean]>
+  - `model` ?<[string]>
+  - `platform` ?<[string]>
+  - `platformVersion` ?<[string]>
+  - `uaFullVersion` ?<[string]>
+  - `wow64` ?<[boolean]>
+
+User agent client hints to report in this context, in the shape returned by `navigator.userAgentData.getHighEntropyValues()`, so a value sampled from a real browser can be passed as is. They are reported by `navigator.userAgentData` and in `Sec-CH-UA-*` headers. Fields that are not given are derived from [`option: userAgent`], as without this option. Requires [`option: userAgent`]. Only supported in Chromium.
+
 ## context-option-devicescalefactor
 - `deviceScaleFactor` <[float]>
 
@@ -1093,6 +1114,7 @@ between the same pixel in compared images, between zero (strict) and one (lax), 
 - %%-context-option-screen-%%
 - %%-python-context-option-no-viewport-%%
 - %%-context-option-useragent-%%
+- %%-context-option-useragentmetadata-%%
 - %%-context-option-devicescalefactor-%%
 - %%-context-option-ismobile-%%
 - %%-context-option-hastouch-%%

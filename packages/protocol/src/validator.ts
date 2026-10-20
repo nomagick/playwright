@@ -162,6 +162,19 @@ scheme.AndroidDeviceLaunchBrowserParams = tObject({
   javaScriptEnabled: tOptional(tBoolean),
   bypassCSP: tOptional(tBoolean),
   userAgent: tOptional(tString),
+  userAgentMetadata: tOptional(tObject({
+    architecture: tOptional(tString),
+    bitness: tOptional(tString),
+    brands: tOptional(tArray(tType('UserAgentBrandVersion'))),
+    formFactors: tOptional(tArray(tString)),
+    fullVersionList: tOptional(tArray(tType('UserAgentBrandVersion'))),
+    mobile: tOptional(tBoolean),
+    model: tOptional(tString),
+    platform: tOptional(tString),
+    platformVersion: tOptional(tString),
+    uaFullVersion: tOptional(tString),
+    wow64: tOptional(tBoolean),
+  })),
   locale: tOptional(tString),
   timezoneId: tOptional(tString),
   geolocation: tOptional(tObject({
@@ -448,6 +461,19 @@ scheme.BrowserNewContextParams = tObject({
   javaScriptEnabled: tOptional(tBoolean),
   bypassCSP: tOptional(tBoolean),
   userAgent: tOptional(tString),
+  userAgentMetadata: tOptional(tObject({
+    architecture: tOptional(tString),
+    bitness: tOptional(tString),
+    brands: tOptional(tArray(tType('UserAgentBrandVersion'))),
+    formFactors: tOptional(tArray(tString)),
+    fullVersionList: tOptional(tArray(tType('UserAgentBrandVersion'))),
+    mobile: tOptional(tBoolean),
+    model: tOptional(tString),
+    platform: tOptional(tString),
+    platformVersion: tOptional(tString),
+    uaFullVersion: tOptional(tString),
+    wow64: tOptional(tBoolean),
+  })),
   locale: tOptional(tString),
   timezoneId: tOptional(tString),
   geolocation: tOptional(tObject({
@@ -526,6 +552,19 @@ scheme.BrowserNewContextForReuseParams = tObject({
   javaScriptEnabled: tOptional(tBoolean),
   bypassCSP: tOptional(tBoolean),
   userAgent: tOptional(tString),
+  userAgentMetadata: tOptional(tObject({
+    architecture: tOptional(tString),
+    bitness: tOptional(tString),
+    brands: tOptional(tArray(tType('UserAgentBrandVersion'))),
+    formFactors: tOptional(tArray(tString)),
+    fullVersionList: tOptional(tArray(tType('UserAgentBrandVersion'))),
+    mobile: tOptional(tBoolean),
+    model: tOptional(tString),
+    platform: tOptional(tString),
+    platformVersion: tOptional(tString),
+    uaFullVersion: tOptional(tString),
+    wow64: tOptional(tBoolean),
+  })),
   locale: tOptional(tString),
   timezoneId: tOptional(tString),
   geolocation: tOptional(tObject({
@@ -626,6 +665,19 @@ scheme.BrowserContextInitializer = tObject({
     javaScriptEnabled: tOptional(tBoolean),
     bypassCSP: tOptional(tBoolean),
     userAgent: tOptional(tString),
+    userAgentMetadata: tOptional(tObject({
+      architecture: tOptional(tString),
+      bitness: tOptional(tString),
+      brands: tOptional(tArray(tType('UserAgentBrandVersion'))),
+      formFactors: tOptional(tArray(tString)),
+      fullVersionList: tOptional(tArray(tType('UserAgentBrandVersion'))),
+      mobile: tOptional(tBoolean),
+      model: tOptional(tString),
+      platform: tOptional(tString),
+      platformVersion: tOptional(tString),
+      uaFullVersion: tOptional(tString),
+      wow64: tOptional(tBoolean),
+    })),
     locale: tOptional(tString),
     timezoneId: tOptional(tString),
     geolocation: tOptional(tObject({
@@ -1028,6 +1080,19 @@ scheme.BrowserTypeLaunchPersistentContextParams = tObject({
   javaScriptEnabled: tOptional(tBoolean),
   bypassCSP: tOptional(tBoolean),
   userAgent: tOptional(tString),
+  userAgentMetadata: tOptional(tObject({
+    architecture: tOptional(tString),
+    bitness: tOptional(tString),
+    brands: tOptional(tArray(tType('UserAgentBrandVersion'))),
+    formFactors: tOptional(tArray(tString)),
+    fullVersionList: tOptional(tArray(tType('UserAgentBrandVersion'))),
+    mobile: tOptional(tBoolean),
+    model: tOptional(tString),
+    platform: tOptional(tString),
+    platformVersion: tOptional(tString),
+    uaFullVersion: tOptional(tString),
+    wow64: tOptional(tBoolean),
+  })),
   locale: tOptional(tString),
   timezoneId: tOptional(tString),
   geolocation: tOptional(tObject({
@@ -3030,6 +3095,10 @@ scheme.URLPattern = tObject({
 scheme.NameValue = tObject({
   name: tString,
   value: tString,
+});
+scheme.UserAgentBrandVersion = tObject({
+  brand: tString,
+  version: tString,
 });
 scheme.TracingInitializer = tOptional(tObject({}));
 scheme.TracingTracingStartParams = tObject({

@@ -60,3 +60,9 @@ NameValue:
   properties:
     name: string
     value: string
+
+UserAgentBrandVersion:
+  type: object
+  properties:
+    brand: string
+    version: string

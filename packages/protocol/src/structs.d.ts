@@ -346,3 +346,8 @@ export type NameValue = {
   value: string,
 };
 
+export type UserAgentBrandVersion = {
+  brand: string,
+  version: string,
+};
+

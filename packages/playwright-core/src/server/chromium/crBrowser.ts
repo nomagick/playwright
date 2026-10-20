@@ -26,7 +26,7 @@ import { Frame } from '../frames';
 import * as network from '../network';
 import { Page } from '../page';
 import { CRConnection, ConnectionEvents } from './crConnection';
-import { CRPage } from './crPage';
+import { CRPage, emulateContextInWorker, needsWorkerEmulation } from './crPage';
 import { saveProtocolStream } from './crProtocolHelper';
 import { CRServiceWorker } from './crServiceWorker';
 
@@ -47,6 +47,7 @@ export class CRBrowser extends Browser {
   readonly _contexts = new Map<string, CRBrowserContext>();
   _crPages = new Map<string, CRPage>();
   _serviceWorkers = new Map<string, CRServiceWorker>();
+  private _sharedWorkerSessions = new Map<string, CRSession>();
   _devtools?: CRDevTools;
   private _version = '';
   private _majorVersion = 0;
@@ -202,6 +203,16 @@ export class CRBrowser extends Browser {
       return;
     }
 
+    if (targetInfo.type === 'shared_worker' && needsWorkerEmulation(context._options)) {
+      // Shared workers would run with the browser defaults and give the context's emulation away. Stay attached so the
+      // overrides stick, and resume the worker, also when the backend restarts it (see below).
+      this._sharedWorkerSessions.set(targetInfo.targetId, session);
+      emulateContextInWorker(session, context._options);
+      session.on('Inspector.targetReloadedAfterCrash', () => session._sendMayFail('Runtime.runIfWaitingForDebugger'));
+      session._sendMayFail('Runtime.runIfWaitingForDebugger');
+      return;
+    }
+
     // Detach from any targets we are not interested in, to avoid side-effects.
     //
     // One example of a side effect: upon shared worker restart, we receive
@@ -223,6 +234,11 @@ export class CRBrowser extends Browser {
       this._serviceWorkers.delete(targetId);
       serviceWorker.didClose();
       return;
+    }
+    const sharedWorkerSession = this._sharedWorkerSessions.get(targetId);
+    if (sharedWorkerSession) {
+      this._sharedWorkerSessions.delete(targetId);
+      sharedWorkerSession.dispose();
     }
   }
 

@@ -20,7 +20,7 @@ import { BrowserContext } from '../browserContext';
 import * as network from '../network';
 import { ConsoleMessage } from '../console';
 import { stackTraceToLocation } from './crProtocolHelper';
-import { calculateUserAgentMetadata } from './crPage';
+import { calculateUserAgentMetadata, emulateContextInWorker } from './crPage';
 
 import type { CRBrowserContext } from './crBrowser';
 import type { CRSession } from './crConnection';
@@ -71,6 +71,7 @@ export class CRServiceWorker extends Worker {
 
     if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] === '0')
       session.send('Runtime.enable', {}).catch(e => {});
+    emulateContextInWorker(session, this.browserContext._options);
     session.send('Runtime.runIfWaitingForDebugger').catch(e => {});
     session.on('Inspector.targetReloadedAfterCrash', () => {
       // Resume service worker after restart.

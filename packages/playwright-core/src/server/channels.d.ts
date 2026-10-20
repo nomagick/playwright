@@ -18,8 +18,8 @@
 
 import type { Progress } from './progress';
 
-import type { Binary, Channel, AndroidWebView, AndroidSelector, AndroidElementInfo, APIResponse, Metadata, ClientSideCallMetadata, SDKLanguage, WaitInfo, SetNetworkCookie, NetworkCookie, ResourceTiming, SecurityDetails, RequestSizes, RemoteAddr, ExpectedTextValue, SelectorEngine, FormField, LifecycleEvent, ConsoleMessagesFilter, RecorderSource, IndexedDBDatabase, SetOriginStorage, OriginStorage, RecordHarOptions, SerializedValue, SerializedArgument, SerializedError, StackFrame, VirtualCredential, Point, Rect, URLPattern, NameValue } from '@protocol/structs';
-export type { Binary, Channel, AndroidWebView, AndroidSelector, AndroidElementInfo, APIResponse, Metadata, ClientSideCallMetadata, SDKLanguage, WaitInfo, SetNetworkCookie, NetworkCookie, ResourceTiming, SecurityDetails, RequestSizes, RemoteAddr, ExpectedTextValue, SelectorEngine, FormField, LifecycleEvent, ConsoleMessagesFilter, RecorderSource, IndexedDBDatabase, SetOriginStorage, OriginStorage, RecordHarOptions, SerializedValue, SerializedArgument, SerializedError, StackFrame, VirtualCredential, Point, Rect, URLPattern, NameValue } from '@protocol/structs';
+import type { Binary, Channel, AndroidWebView, AndroidSelector, AndroidElementInfo, APIResponse, Metadata, ClientSideCallMetadata, SDKLanguage, WaitInfo, SetNetworkCookie, NetworkCookie, ResourceTiming, SecurityDetails, RequestSizes, RemoteAddr, ExpectedTextValue, SelectorEngine, FormField, LifecycleEvent, ConsoleMessagesFilter, RecorderSource, IndexedDBDatabase, SetOriginStorage, OriginStorage, RecordHarOptions, SerializedValue, SerializedArgument, SerializedError, StackFrame, VirtualCredential, Point, Rect, URLPattern, NameValue, UserAgentBrandVersion } from '@protocol/structs';
+export type { Binary, Channel, AndroidWebView, AndroidSelector, AndroidElementInfo, APIResponse, Metadata, ClientSideCallMetadata, SDKLanguage, WaitInfo, SetNetworkCookie, NetworkCookie, ResourceTiming, SecurityDetails, RequestSizes, RemoteAddr, ExpectedTextValue, SelectorEngine, FormField, LifecycleEvent, ConsoleMessagesFilter, RecorderSource, IndexedDBDatabase, SetOriginStorage, OriginStorage, RecordHarOptions, SerializedValue, SerializedArgument, SerializedError, StackFrame, VirtualCredential, Point, Rect, URLPattern, NameValue, UserAgentBrandVersion } from '@protocol/structs';
 
 // ----------- Initializer Traits -----------
 export type InitializerTraits<T> =
@@ -395,6 +395,19 @@ export type AndroidDeviceLaunchBrowserParams = {
   javaScriptEnabled?: boolean,
   bypassCSP?: boolean,
   userAgent?: string,
+  userAgentMetadata?: {
+    architecture?: string,
+    bitness?: string,
+    brands?: UserAgentBrandVersion[],
+    formFactors?: string[],
+    fullVersionList?: UserAgentBrandVersion[],
+    mobile?: boolean,
+    model?: string,
+    platform?: string,
+    platformVersion?: string,
+    uaFullVersion?: string,
+    wow64?: boolean,
+  },
   locale?: string,
   timezoneId?: string,
   geolocation?: {
@@ -467,6 +480,19 @@ export type AndroidDeviceLaunchBrowserOptions = {
   javaScriptEnabled?: boolean,
   bypassCSP?: boolean,
   userAgent?: string,
+  userAgentMetadata?: {
+    architecture?: string,
+    bitness?: string,
+    brands?: UserAgentBrandVersion[],
+    formFactors?: string[],
+    fullVersionList?: UserAgentBrandVersion[],
+    mobile?: boolean,
+    model?: string,
+    platform?: string,
+    platformVersion?: string,
+    uaFullVersion?: string,
+    wow64?: boolean,
+  },
   locale?: string,
   timezoneId?: string,
   geolocation?: {
@@ -852,6 +878,19 @@ export type BrowserNewContextParams = {
   javaScriptEnabled?: boolean,
   bypassCSP?: boolean,
   userAgent?: string,
+  userAgentMetadata?: {
+    architecture?: string,
+    bitness?: string,
+    brands?: UserAgentBrandVersion[],
+    formFactors?: string[],
+    fullVersionList?: UserAgentBrandVersion[],
+    mobile?: boolean,
+    model?: string,
+    platform?: string,
+    platformVersion?: string,
+    uaFullVersion?: string,
+    wow64?: boolean,
+  },
   locale?: string,
   timezoneId?: string,
   geolocation?: {
@@ -927,6 +966,19 @@ export type BrowserNewContextOptions = {
   javaScriptEnabled?: boolean,
   bypassCSP?: boolean,
   userAgent?: string,
+  userAgentMetadata?: {
+    architecture?: string,
+    bitness?: string,
+    brands?: UserAgentBrandVersion[],
+    formFactors?: string[],
+    fullVersionList?: UserAgentBrandVersion[],
+    mobile?: boolean,
+    model?: string,
+    platform?: string,
+    platformVersion?: string,
+    uaFullVersion?: string,
+    wow64?: boolean,
+  },
   locale?: string,
   timezoneId?: string,
   geolocation?: {
@@ -1005,6 +1057,19 @@ export type BrowserNewContextForReuseParams = {
   javaScriptEnabled?: boolean,
   bypassCSP?: boolean,
   userAgent?: string,
+  userAgentMetadata?: {
+    architecture?: string,
+    bitness?: string,
+    brands?: UserAgentBrandVersion[],
+    formFactors?: string[],
+    fullVersionList?: UserAgentBrandVersion[],
+    mobile?: boolean,
+    model?: string,
+    platform?: string,
+    platformVersion?: string,
+    uaFullVersion?: string,
+    wow64?: boolean,
+  },
   locale?: string,
   timezoneId?: string,
   geolocation?: {
@@ -1080,6 +1145,19 @@ export type BrowserNewContextForReuseOptions = {
   javaScriptEnabled?: boolean,
   bypassCSP?: boolean,
   userAgent?: string,
+  userAgentMetadata?: {
+    architecture?: string,
+    bitness?: string,
+    brands?: UserAgentBrandVersion[],
+    formFactors?: string[],
+    fullVersionList?: UserAgentBrandVersion[],
+    mobile?: boolean,
+    model?: string,
+    platform?: string,
+    platformVersion?: string,
+    uaFullVersion?: string,
+    wow64?: boolean,
+  },
   locale?: string,
   timezoneId?: string,
   geolocation?: {
@@ -1197,6 +1275,19 @@ export type BrowserContextInitializer = {
     javaScriptEnabled?: boolean,
     bypassCSP?: boolean,
     userAgent?: string,
+    userAgentMetadata?: {
+      architecture?: string,
+      bitness?: string,
+      brands?: UserAgentBrandVersion[],
+      formFactors?: string[],
+      fullVersionList?: UserAgentBrandVersion[],
+      mobile?: boolean,
+      model?: string,
+      platform?: string,
+      platformVersion?: string,
+      uaFullVersion?: string,
+      wow64?: boolean,
+    },
     locale?: string,
     timezoneId?: string,
     geolocation?: {
@@ -1848,6 +1939,19 @@ export type BrowserTypeLaunchPersistentContextParams = {
   javaScriptEnabled?: boolean,
   bypassCSP?: boolean,
   userAgent?: string,
+  userAgentMetadata?: {
+    architecture?: string,
+    bitness?: string,
+    brands?: UserAgentBrandVersion[],
+    formFactors?: string[],
+    fullVersionList?: UserAgentBrandVersion[],
+    mobile?: boolean,
+    model?: string,
+    platform?: string,
+    platformVersion?: string,
+    uaFullVersion?: string,
+    wow64?: boolean,
+  },
   locale?: string,
   timezoneId?: string,
   geolocation?: {
@@ -1936,6 +2040,19 @@ export type BrowserTypeLaunchPersistentContextOptions = {
   javaScriptEnabled?: boolean,
   bypassCSP?: boolean,
   userAgent?: string,
+  userAgentMetadata?: {
+    architecture?: string,
+    bitness?: string,
+    brands?: UserAgentBrandVersion[],
+    formFactors?: string[],
+    fullVersionList?: UserAgentBrandVersion[],
+    mobile?: boolean,
+    model?: string,
+    platform?: string,
+    platformVersion?: string,
+    uaFullVersion?: string,
+    wow64?: boolean,
+  },
   locale?: string,
   timezoneId?: string,
   geolocation?: {

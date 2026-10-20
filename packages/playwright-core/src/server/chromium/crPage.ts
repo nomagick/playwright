@@ -750,6 +750,7 @@ class FrameSession {
       session._sendMayFail('Runtime.enable');
     }
     this._crPage._networkManager.addSession(session, this._page.frameManager.frame(event.targetInfo.parentFrameId ?? this._targetId) ?? undefined).catch(() => {});
+    emulateContextInWorker(session, this._crPage._browserContext._options);
     session._sendMayFail('Runtime.runIfWaitingForDebugger');
     session._sendMayFail('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: true, flatten: true });
     session.on('Target.attachedToTarget', event => this._onAttachedToTarget(event));
@@ -1229,5 +1230,32 @@ export function calculateUserAgentMetadata(options: types.BrowserContextOptions)
   }
   if (ua.includes('ARM'))
     metadata.architecture = 'arm';
+  if (options.userAgentMetadata) {
+    // Same shape as navigator.userAgentData.getHighEntropyValues(), whose uaFullVersion is CDP's fullVersion.
+    const { uaFullVersion, ...values } = options.userAgentMetadata;
+    return { ...metadata, ...values, ...(uaFullVersion !== undefined ? { fullVersion: uaFullVersion } : {}) };
+  }
   return metadata;
+}
+
+// Workers don't take the page's emulation: without this, navigator.languages, Intl's locale and time zone in a worker
+// stay at the browser defaults, and so do navigator.userAgentData's brands in shared and service workers, which tells
+// them apart from the page. Call it while the worker waits for the debugger, before Runtime.runIfWaitingForDebugger;
+// commands on a session run in order, so nothing has to be awaited.
+export function emulateContextInWorker(session: CRSession, options: types.BrowserContextOptions) {
+  if (options.userAgent || options.locale) {
+    session._sendMayFail('Emulation.setUserAgentOverride', {
+      userAgent: options.userAgent || '',
+      acceptLanguage: options.locale,
+      userAgentMetadata: calculateUserAgentMetadata(options),
+    });
+  }
+  if (options.locale)
+    emulateLocale(session, options.locale).catch(() => {});
+  if (options.timezoneId)
+    emulateTimezone(session, options.timezoneId).catch(() => {});
+}
+
+export function needsWorkerEmulation(options: types.BrowserContextOptions): boolean {
+  return !!(options.userAgent || options.locale || options.timezoneId);
 }

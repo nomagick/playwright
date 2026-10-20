@@ -766,6 +766,8 @@ export function validateBrowserContextOptions(options: types.BrowserContextOptio
     options.viewport = { width: 1280, height: 720 };
   if (options.proxy)
     options.proxy = normalizeProxySettings(options.proxy);
+  if (options.userAgentMetadata && !options.userAgent)
+    throw new Error(`"userAgentMetadata" option requires "userAgent"`);
   verifyGeolocation(options.geolocation);
 }
 

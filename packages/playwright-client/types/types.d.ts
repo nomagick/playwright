@@ -11507,6 +11507,46 @@ export interface Browser {
     userAgent?: string;
 
     /**
+     * User agent client hints to report in this context, in the shape returned by
+     * `navigator.userAgentData.getHighEntropyValues()`, so a value sampled from a real browser can be passed as is. They
+     * are reported by `navigator.userAgentData` and in `Sec-CH-UA-*` headers. Fields that are not given are derived from
+     * [`userAgent`](https://playwright.dev/docs/api/class-browser#browser-new-page-option-user-agent), as without this
+     * option. Requires [`userAgent`](https://playwright.dev/docs/api/class-browser#browser-new-page-option-user-agent).
+     * Only supported in Chromium.
+     */
+    userAgentMetadata?: {
+      architecture?: string;
+
+      bitness?: string;
+
+      brands?: Array<{
+        brand: string;
+
+        version: string;
+      }>;
+
+      formFactors?: Array<string>;
+
+      fullVersionList?: Array<{
+        brand: string;
+
+        version: string;
+      }>;
+
+      mobile?: boolean;
+
+      model?: string;
+
+      platform?: string;
+
+      platformVersion?: string;
+
+      uaFullVersion?: string;
+
+      wow64?: boolean;
+    };
+
+    /**
      * Emulates consistent viewport for each page. Defaults to an 1280x720 viewport. Use `null` to disable the consistent
      * viewport emulation. Learn more about [viewport emulation](https://playwright.dev/docs/emulation#viewport).
      *
@@ -17516,6 +17556,47 @@ export interface BrowserType<Unused = {}> {
      * Specific user agent to use in this context.
      */
     userAgent?: string;
+
+    /**
+     * User agent client hints to report in this context, in the shape returned by
+     * `navigator.userAgentData.getHighEntropyValues()`, so a value sampled from a real browser can be passed as is. They
+     * are reported by `navigator.userAgentData` and in `Sec-CH-UA-*` headers. Fields that are not given are derived from
+     * [`userAgent`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context-option-user-agent),
+     * as without this option. Requires
+     * [`userAgent`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context-option-user-agent).
+     * Only supported in Chromium.
+     */
+    userAgentMetadata?: {
+      architecture?: string;
+
+      bitness?: string;
+
+      brands?: Array<{
+        brand: string;
+
+        version: string;
+      }>;
+
+      formFactors?: Array<string>;
+
+      fullVersionList?: Array<{
+        brand: string;
+
+        version: string;
+      }>;
+
+      mobile?: boolean;
+
+      model?: string;
+
+      platform?: string;
+
+      platformVersion?: string;
+
+      uaFullVersion?: string;
+
+      wow64?: boolean;
+    };
 
     /**
      * Emulates consistent viewport for each page. Defaults to an 1280x720 viewport. Use `null` to disable the consistent
@@ -24493,6 +24574,47 @@ export interface AndroidDevice {
     userAgent?: string;
 
     /**
+     * User agent client hints to report in this context, in the shape returned by
+     * `navigator.userAgentData.getHighEntropyValues()`, so a value sampled from a real browser can be passed as is. They
+     * are reported by `navigator.userAgentData` and in `Sec-CH-UA-*` headers. Fields that are not given are derived from
+     * [`userAgent`](https://playwright.dev/docs/api/class-androiddevice#android-device-launch-browser-option-user-agent),
+     * as without this option. Requires
+     * [`userAgent`](https://playwright.dev/docs/api/class-androiddevice#android-device-launch-browser-option-user-agent).
+     * Only supported in Chromium.
+     */
+    userAgentMetadata?: {
+      architecture?: string;
+
+      bitness?: string;
+
+      brands?: Array<{
+        brand: string;
+
+        version: string;
+      }>;
+
+      formFactors?: Array<string>;
+
+      fullVersionList?: Array<{
+        brand: string;
+
+        version: string;
+      }>;
+
+      mobile?: boolean;
+
+      model?: string;
+
+      platform?: string;
+
+      platformVersion?: string;
+
+      uaFullVersion?: string;
+
+      wow64?: boolean;
+    };
+
+    /**
      * Emulates consistent viewport for each page. Defaults to an 1280x720 viewport. Use `null` to disable the consistent
      * viewport emulation. Learn more about [viewport emulation](https://playwright.dev/docs/emulation#viewport).
      *
@@ -25755,6 +25877,47 @@ export interface BrowserContextOptions {
    * Specific user agent to use in this context.
    */
   userAgent?: string;
+
+  /**
+   * User agent client hints to report in this context, in the shape returned by
+   * `navigator.userAgentData.getHighEntropyValues()`, so a value sampled from a real browser can be passed as is. They
+   * are reported by `navigator.userAgentData` and in `Sec-CH-UA-*` headers. Fields that are not given are derived from
+   * [`userAgent`](https://playwright.dev/docs/api/class-browser#browser-new-context-option-user-agent), as without this
+   * option. Requires
+   * [`userAgent`](https://playwright.dev/docs/api/class-browser#browser-new-context-option-user-agent). Only supported
+   * in Chromium.
+   */
+  userAgentMetadata?: {
+    architecture?: string;
+
+    bitness?: string;
+
+    brands?: Array<{
+      brand: string;
+
+      version: string;
+    }>;
+
+    formFactors?: Array<string>;
+
+    fullVersionList?: Array<{
+      brand: string;
+
+      version: string;
+    }>;
+
+    mobile?: boolean;
+
+    model?: string;
+
+    platform?: string;
+
+    platformVersion?: string;
+
+    uaFullVersion?: string;
+
+    wow64?: boolean;
+  };
 
   /**
    * Emulates consistent viewport for each page. Defaults to an 1280x720 viewport. Use `null` to disable the consistent
