@@ -91,6 +91,7 @@ LaunchOptions:
     tracesDir: string?
     artifactsDir: string?
     chromiumSandbox: boolean?
+    reBrowserPatch: boolean?
     firefoxUserPrefs: json?
     cdpPort: int?
 

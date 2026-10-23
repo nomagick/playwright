@@ -210,22 +210,17 @@ export class CRSession extends SdkObject<Protocol.EventMap & ConnectionEventMap>
     targetId,
     frame = null
   }: any) {
-    const fixMode = process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] || 'addBinding';
     // the name Playwright expects for its utility world (see CRPage.utilityWorldName), workers have no utility world
-    const utilityWorldName = frame?._page?.delegate?.utilityWorldName || 'util';
-    process.env['REBROWSER_PATCHES_DEBUG'] && console.log(`[rebrowser-patches][crSession] targetId = ${targetId}, world = ${world}, frame = ${frame ? 'Y' : 'N'}, fixMode = ${fixMode}`);
+    const utilityWorldName = frame?._page?.delegate?.utilityWorldName || 'rbp_util';
+    debugLogger.log('rebrowser', `[crSession] targetId = ${targetId}, world = ${world}, frame = ${frame ? 'Y' : 'N'}`);
 
     let contextPayload;
     if (world === 'utility') {
-      // both modes: a real isolated world with the utility name
+      // a real isolated world with the utility name
       const contextId = await this.__re__getIsolatedWorld({ client: this, frameId: targetId, worldName: utilityWorldName });
       contextPayload = { id: contextId, name: utilityWorldName, auxData: { frameId: targetId, isDefault: false } };
-    } else if (fixMode === 'alwaysIsolated' && frame) {
-      // main world requested: give an isolated world that looks like the main one
-      const contextId = await this.__re__getIsolatedWorld({ client: this, frameId: targetId, worldName: utilityWorldName });
-      contextPayload = { id: contextId, name: '', auxData: { frameId: targetId, isDefault: true } };
     } else {
-      // addBinding mode, and workers in every mode (workers have no isolated worlds)
+      // main world, for frames and workers (workers have no isolated worlds)
       const contextId = await this.__re__getMainWorld({ client: this, frameId: targetId, isWorker: frame === null });
       contextPayload = { id: contextId, name: '', auxData: { frameId: targetId, isDefault: true } };
     }
@@ -245,11 +240,11 @@ export class CRSession extends SdkObject<Protocol.EventMap & ConnectionEventMap>
       if (contextId)
         return contextId;
     } catch (error) {
-      process.env['REBROWSER_PATCHES_DEBUG'] && console.log('[rebrowser-patches][getMainWorld] object lookup failed, using a binding:', error);
+      debugLogger.log('rebrowser', `[getMainWorld] object lookup failed, using a binding: ${error}`);
     }
     if (!rebrowserFallbackWarned) {
       rebrowserFallbackWarned = true;
-      console.warn('[rebrowser-patches] could not look up the page\'s context id without touching the page; falling back to a binding handshake that page scripts can notice. Please report this with your Chrome version. REBROWSER_PATCHES_RUNTIME_FIX_MODE=alwaysIsolated avoids it.');
+      debugLogger.log('rebrowser', `[rebrowser-patches] could not look up the page's context id without touching the page; falling back to a binding handshake that page scripts can notice. Please report this with your Chrome version.`);
     }
     return this.__re__getMainWorldByBinding({ client, frameId, isWorker });
   }
@@ -272,7 +267,7 @@ export class CRSession extends SdkObject<Protocol.EventMap & ConnectionEventMap>
       client.send('Runtime.releaseObjectGroup', { objectGroup }).catch(() => {});
     }
     const match = /^-?\d+\.(\d+)\.\d+$/.exec(objectId || '');
-    process.env['REBROWSER_PATCHES_DEBUG'] && console.log(`[rebrowser-patches][getMainWorldIdByObject] frameId = ${frameId}, objectId = ${objectId}`);
+    debugLogger.log('rebrowser', `[getMainWorldIdByObject] frameId = ${frameId}, objectId = ${objectId}`);
     return match ? Number(match[1]) : undefined;
   }
   async __re__getMainWorldByBinding({ client, frameId, isWorker = false }: any) {
@@ -281,7 +276,7 @@ export class CRSession extends SdkObject<Protocol.EventMap & ConnectionEventMap>
 
     // random name to make it harder to detect for any 3rd party script by watching window object and events
     const randomName = [...Array(Math.floor(Math.random() * (10 + 1)) + 10)].map(() => Math.random().toString(36)[2]).join('');
-    process.env['REBROWSER_PATCHES_DEBUG'] && console.log(`[rebrowser-patches][getMainWorld] binding name = ${randomName}`);
+    debugLogger.log('rebrowser', `[getMainWorld] binding name = ${randomName}`);
 
     // add the binding
     await client.send('Runtime.addBinding', {
@@ -290,11 +285,7 @@ export class CRSession extends SdkObject<Protocol.EventMap & ConnectionEventMap>
 
     // listen for 'Runtime.bindingCalled' event
     const bindingCalledHandler = ({ name, payload, executionContextId }: any) => {
-      process.env['REBROWSER_PATCHES_DEBUG'] && console.log('[rebrowser-patches][bindingCalledHandler]', {
-        name,
-        payload,
-        executionContextId
-      });
+      debugLogger.log('rebrowser', `[bindingCalledHandler] ${JSON.stringify({ name, payload, executionContextId })}`);
       if (contextId > 0) {
         // already acquired the id
         return;
@@ -341,7 +332,7 @@ export class CRSession extends SdkObject<Protocol.EventMap & ConnectionEventMap>
       });
     }
 
-    process.env['REBROWSER_PATCHES_DEBUG'] && console.log(`[rebrowser-patches][getMainWorld] result:`, { contextId });
+    debugLogger.log('rebrowser', `[getMainWorld] result: ${JSON.stringify({ contextId })}`);
     // don't leave the handshake behind: a native function with a random name on the global object is easy to spot
     client.send('Runtime.removeBinding', { name: randomName }).catch(() => {});
     if (contextId)
@@ -356,7 +347,7 @@ export class CRSession extends SdkObject<Protocol.EventMap & ConnectionEventMap>
       worldName,
       grantUniveralAccess: true,
     });
-    process.env['REBROWSER_PATCHES_DEBUG'] && console.log(`[rebrowser-patches][getIsolatedWorld] result:`, createIsolatedWorldResult);
+    debugLogger.log('rebrowser', `[getIsolatedWorld] result: ${JSON.stringify(createIsolatedWorldResult)}`);
     return createIsolatedWorldResult.executionContextId;
   }
 }

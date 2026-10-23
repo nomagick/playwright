@@ -346,6 +346,12 @@ Whether to ignore HTTPS errors when sending network requests. Defaults to `false
 
 Toggles bypassing page's Content-Security-Policy. Defaults to `false`.
 
+## context-option-rebrowserpatch
+* langs: js
+- `reBrowserPatch` <[boolean]>
+
+Applies the [rebrowser-patches](https://github.com/rebrowser/rebrowser-patches) runtime patches to this context, so pages can't tell they are automated: no `Runtime.enable` (execution contexts are created on demand instead), random names for Playwright's binding, bindings controller and `UtilityScript`, and a plain utility world name. Only supported in Chromium. Defaults to `false`.
+
 ## context-option-baseURL
 - `baseURL` <[string]>
 
@@ -1172,6 +1178,12 @@ Use "chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-be
 Enable Chromium sandboxing. Defaults to `false`.
 
 
+## browser-option-rebrowserpatch
+* langs: js
+- `reBrowserPatch` <[boolean]>
+
+Applies the [rebrowser-patches](https://github.com/rebrowser/rebrowser-patches) launch-argument patches: hides `navigator.webdriver` with `--disable-blink-features=AutomationControlled` (merged with any `--disable-blink-features` in [`option: BrowserType.launch.args`]), and drops `--disable-popup-blocking`, `--disable-ipc-flooding-protection` and the `ThirdPartyStoragePartitioning` entry of `--disable-features`. With [`method: BrowserType.launchPersistentContext`], it also applies the context patches, see [`option: Browser.newContext.reBrowserPatch`]. Only supported in Chromium. Defaults to `false`.
+
 ## browser-option-downloadspath
 - `downloadsPath` <[path]>
 
@@ -1270,6 +1282,7 @@ Slows down Playwright operations by the specified amount of milliseconds. Useful
 - %%-browser-option-headless-%%
 - %%-browser-option-ignoredefaultargs-%%
 - %%-browser-option-proxy-%%
+- %%-browser-option-rebrowserpatch-%%
 - %%-browser-option-timeout-%%
 - %%-browser-option-tracesdir-%%
 

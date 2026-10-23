@@ -64,11 +64,7 @@ export class CRDevTools {
       }).catch(e => null);
     });
     Promise.all([
-      (() => {
-        if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] === '0') {
-          return session.send('Runtime.enable', {})
-        }
-      })(),
+      session.send('Runtime.enable'),
       session.send('Runtime.addBinding', { name: kBindingName }),
       session.send('Page.enable'),
       session.send('Page.addScriptToEvaluateOnNewDocument', { source: `

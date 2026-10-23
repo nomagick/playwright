@@ -104,7 +104,7 @@ export class FrameExecutionContext extends js.ExecutionContext {
         (() => {
         ${globalsSnapshot}
         const module = {};
-        ${js.rebrowserRenameBindings(rawInjectedScriptSource.source)}
+        ${js.rebrowserRenameBindings(rawInjectedScriptSource.source, js.rebrowserPatchEnabled(this))}
         return new (module.exports.InjectedScript())(globalThis, ${JSON.stringify(options)});
         })();
       `;

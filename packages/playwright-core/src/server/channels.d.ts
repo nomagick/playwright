@@ -939,6 +939,7 @@ export type BrowserNewContextParams = {
     username?: string,
     password?: string,
   },
+  reBrowserPatch?: boolean,
   storageState?: {
     cookies?: SetNetworkCookie[],
     origins?: SetOriginStorage[],
@@ -1027,6 +1028,7 @@ export type BrowserNewContextOptions = {
     username?: string,
     password?: string,
   },
+  reBrowserPatch?: boolean,
   storageState?: {
     cookies?: SetNetworkCookie[],
     origins?: SetOriginStorage[],
@@ -1118,6 +1120,7 @@ export type BrowserNewContextForReuseParams = {
     username?: string,
     password?: string,
   },
+  reBrowserPatch?: boolean,
   storageState?: {
     cookies?: SetNetworkCookie[],
     origins?: SetOriginStorage[],
@@ -1206,6 +1209,7 @@ export type BrowserNewContextForReuseOptions = {
     username?: string,
     password?: string,
   },
+  reBrowserPatch?: boolean,
   storageState?: {
     cookies?: SetNetworkCookie[],
     origins?: SetOriginStorage[],
@@ -1864,6 +1868,7 @@ export type BrowserTypeLaunchParams = {
   tracesDir?: string,
   artifactsDir?: string,
   chromiumSandbox?: boolean,
+  reBrowserPatch?: boolean,
   firefoxUserPrefs?: any,
   cdpPort?: number,
   slowMo?: number,
@@ -1889,6 +1894,7 @@ export type BrowserTypeLaunchOptions = {
   tracesDir?: string,
   artifactsDir?: string,
   chromiumSandbox?: boolean,
+  reBrowserPatch?: boolean,
   firefoxUserPrefs?: any,
   cdpPort?: number,
   slowMo?: number,
@@ -1917,6 +1923,7 @@ export type BrowserTypeLaunchPersistentContextParams = {
   tracesDir?: string,
   artifactsDir?: string,
   chromiumSandbox?: boolean,
+  reBrowserPatch?: boolean,
   firefoxUserPrefs?: any,
   cdpPort?: number,
   noDefaultViewport?: boolean,
@@ -2018,6 +2025,7 @@ export type BrowserTypeLaunchPersistentContextOptions = {
   tracesDir?: string,
   artifactsDir?: string,
   chromiumSandbox?: boolean,
+  reBrowserPatch?: boolean,
   firefoxUserPrefs?: any,
   cdpPort?: number,
   noDefaultViewport?: boolean,

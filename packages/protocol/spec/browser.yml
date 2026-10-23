@@ -67,6 +67,7 @@ Browser:
             bypass: string?
             username: string?
             password: string?
+        reBrowserPatch: boolean?
         storageState:
           type: object?
           properties:
@@ -93,6 +94,7 @@ Browser:
             bypass: string?
             username: string?
             password: string?
+        reBrowserPatch: boolean?
         storageState:
           type: object?
           properties:

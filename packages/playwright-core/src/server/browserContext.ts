@@ -94,6 +94,8 @@ export abstract class BrowserContext<EM extends EventMap = EventMap> extends Sdk
 
   readonly _pageBindings = new Map<string, PageBinding>();
   readonly _options: types.BrowserContextOptions;
+  // rebrowser-patches: the reBrowserPatch option, Chromium only
+  readonly _rebrowserPatch: boolean;
   readonly requestInterceptors: network.RouteHandler[] = [];
   private _isPersistentContext: boolean;
   private _closedStatus: 'open' | 'closing' | 'closed' = 'open';
@@ -127,6 +129,7 @@ export abstract class BrowserContext<EM extends EventMap = EventMap> extends Sdk
     this.attribution.context = this;
     this._browser = browser;
     this._options = options;
+    this._rebrowserPatch = !!options.reBrowserPatch && browser.options.browserType === 'chromium';
     this._browserContextId = browserContextId;
     this._isPersistentContext = !browserContextId;
     this._closePromise = new Promise(fulfill => this._closePromiseFulfill = fulfill);
@@ -619,7 +622,7 @@ export abstract class BrowserContext<EM extends EventMap = EventMap> extends Sdk
 
     const collectScript = `(() => {
       const module = {};
-      ${rebrowserRenameBindings(rawStorageSource.source)}
+      ${rebrowserRenameBindings(rawStorageSource.source, this._rebrowserPatch)}
       const script = new (module.exports.StorageScript())(${this._browser.options.name === 'firefox'});
       return script.collect(${indexedDB});
     })()`;
@@ -704,7 +707,7 @@ export abstract class BrowserContext<EM extends EventMap = EventMap> extends Sdk
           await frame.gotoImpl(progress, origin, {});
           const restoreScript = `(() => {
             const module = {};
-            ${rebrowserRenameBindings(rawStorageSource.source)}
+            ${rebrowserRenameBindings(rawStorageSource.source, this._rebrowserPatch)}
             const script = new (module.exports.StorageScript())(${this._browser.options.name === 'firefox'});
             return script.restore(${JSON.stringify(newOrigins.get(origin))});
           })()`;

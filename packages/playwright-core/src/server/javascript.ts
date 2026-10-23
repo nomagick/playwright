@@ -55,33 +55,44 @@ export interface ExecutionContextDelegate {
   shouldPrependErrorPrefix(): boolean;
 }
 
+// rebrowser-patches: whether the patches apply to this object's browser context, see the reBrowserPatch option.
+// Objects outside of a browser context (e.g. Android, Electron) are never patched.
+export function rebrowserPatchEnabled(object: SdkObject): boolean {
+  // the attributed context may be an APIRequestContext, which has no such flag
+  return !!(object.attribution.context as { _rebrowserPatch?: boolean } | undefined)?._rebrowserPatch;
+}
+
 // rebrowser-patches: Playwright's CDP binding (__playwright__binding__) and the global its bindings controller lives
-// in (__playwright__binding__controller__) have fixed names that page scripts can look up. Use random names picked
-// once per process instead. The binding name is only ever read from PageBinding.kBindingName; the controller name is
-// spelled out in the injected sources and in init scripts built by the client, so those go through
-// rebrowserRenameBindings() wherever they reach the page. REBROWSER_PATCHES_RUNTIME_FIX_MODE=0 keeps the originals.
-const rebrowserRenamesBindings = process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0';
+// in (__playwright__binding__controller__) have fixed names that page scripts can look up. Patched contexts use
+// random names picked once per process instead. The controller name is spelled out in the injected sources and in
+// init scripts built by the client, so those go through rebrowserRenameBindings() wherever they reach the page.
 function rebrowserRandomName(): string {
   const letters = 'abcdefghijklmnopqrstuvwxyz';
   return [...Array(Math.floor(Math.random() * 11) + 10)].map(() => letters[Math.floor(Math.random() * letters.length)]).join('');
 }
-export const rebrowserBindingName = rebrowserRenamesBindings ? rebrowserRandomName() : '__playwright__binding__';
-export const rebrowserBindingsControllerProperty = rebrowserRenamesBindings ? rebrowserRandomName() : kBindingsControllerProperty;
-export function rebrowserRenameBindings(source: string): string {
-  if (!rebrowserRenamesBindings)
+const rebrowserRandomBindingName = rebrowserRandomName();
+const rebrowserRandomBindingsControllerProperty = rebrowserRandomName();
+export function rebrowserBindingName(patched: boolean): string {
+  return patched ? rebrowserRandomBindingName : '__playwright__binding__';
+}
+export function rebrowserBindingsControllerProperty(patched: boolean): string {
+  return patched ? rebrowserRandomBindingsControllerProperty : kBindingsControllerProperty;
+}
+export function rebrowserRenameBindings(source: string, patched: boolean): string {
+  if (!patched)
     return source;
-  return source.split(kBindingsControllerProperty).join(rebrowserBindingsControllerProperty);
+  return source.split(kBindingsControllerProperty).join(rebrowserRandomBindingsControllerProperty);
 }
 
 // rebrowser-patches: V8 names stack frames after the class binding, so a page calling `new Error().stack` from
-// inside an evaluate() sees "UtilityScript.evaluate". Rename the binding to a short name picked at random once per
-// process, and shift the script down by a random number of lines, so the frames carry no fixed name or position that
-// would identify the patch. REBROWSER_PATCHES_SOURCE_URL=0 keeps the original source.
+// inside an evaluate() sees "UtilityScript.evaluate". Patched contexts rename the binding to a short name picked at
+// random once per process, and shift the script down by a random number of lines, so the frames carry no fixed name
+// or position that would identify the patch.
 let rebrowserUtilityScriptName: string | undefined;
 const rebrowserUtilityScriptOffset = '\n'.repeat(Math.floor(Math.random() * 100));
-function utilityScriptSource(): string {
-  const source = rebrowserRenameBindings(rawUtilityScriptSource.source);
-  if (process.env['REBROWSER_PATCHES_SOURCE_URL'] === '0')
+function utilityScriptSource(patched: boolean): string {
+  const source = rebrowserRenameBindings(rawUtilityScriptSource.source, patched);
+  if (!patched)
     return source;
   if (!rebrowserUtilityScriptName) {
     const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -156,7 +167,7 @@ export class ExecutionContext extends SdkObject {
       (() => {
         ${globalsSnapshot}
         const module = {};
-        ${utilityScriptSource()}
+        ${utilityScriptSource(rebrowserPatchEnabled(this))}
         return new (module.exports.UtilityScript())(globalThis, ${isUnderTest()});
       })();`;
       this._utilityScriptPromise = this.raceAgainstContextDestroyed(this.delegate.rawEvaluateHandle(this, source))

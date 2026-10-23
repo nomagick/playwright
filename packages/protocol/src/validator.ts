@@ -522,6 +522,7 @@ scheme.BrowserNewContextParams = tObject({
     username: tOptional(tString),
     password: tOptional(tString),
   })),
+  reBrowserPatch: tOptional(tBoolean),
   storageState: tOptional(tObject({
     cookies: tOptional(tArray(tType('SetNetworkCookie'))),
     origins: tOptional(tArray(tType('SetOriginStorage'))),
@@ -613,6 +614,7 @@ scheme.BrowserNewContextForReuseParams = tObject({
     username: tOptional(tString),
     password: tOptional(tString),
   })),
+  reBrowserPatch: tOptional(tBoolean),
   storageState: tOptional(tObject({
     cookies: tOptional(tArray(tType('SetNetworkCookie'))),
     origins: tOptional(tArray(tType('SetOriginStorage'))),
@@ -1030,6 +1032,7 @@ scheme.BrowserTypeLaunchParams = tObject({
   tracesDir: tOptional(tString),
   artifactsDir: tOptional(tString),
   chromiumSandbox: tOptional(tBoolean),
+  reBrowserPatch: tOptional(tBoolean),
   firefoxUserPrefs: tOptional(tAny),
   cdpPort: tOptional(tInt),
   slowMo: tOptional(tFloat),
@@ -1058,6 +1061,7 @@ scheme.BrowserTypeLaunchPersistentContextParams = tObject({
   tracesDir: tOptional(tString),
   artifactsDir: tOptional(tString),
   chromiumSandbox: tOptional(tBoolean),
+  reBrowserPatch: tOptional(tBoolean),
   firefoxUserPrefs: tOptional(tAny),
   cdpPort: tOptional(tInt),
   noDefaultViewport: tOptional(tBoolean),

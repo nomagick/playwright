@@ -263,7 +263,7 @@ export class FrameManager {
     }
 
     // rebrowser-patches: there are no Runtime events, so drop this frame's old contexts when a new document commits
-    if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' && frame._rebrowserSession()) {
+    if (frame._rebrowserSession()) {
       frame._rebrowserDropContexts();
       // and add the page binding again: Chrome drops it on navigation without Runtime.enable (crbug.com/382473087).
       // A binding only reaches contexts that exist when it is added, and without Runtime.enable Chrome creates the
@@ -275,7 +275,7 @@ export class FrameManager {
       if (this._page.browserContext.needsPlaywrightBinding()) {
         const session = frame._rebrowserSession();
         session.__re__getMainWorldIdByObject({ client: session, frameId: frame._id, isWorker: false }).catch(() => undefined)
-            .then((executionContextId: number | undefined) => session.send('Runtime.addBinding', executionContextId ? { name: PageBinding.kBindingName, executionContextId } : { name: PageBinding.kBindingName })).catch(() => {});
+            .then((executionContextId: number | undefined) => session.send('Runtime.addBinding', executionContextId ? { name: PageBinding.bindingName(this._page.browserContext), executionContextId } : { name: PageBinding.bindingName(this._page.browserContext) })).catch(() => {});
       }
     }
     frame._onClearLifecycle();
@@ -810,8 +810,10 @@ export class Frame extends SdkObject<FrameEventMap> {
     }
   }
 
-  // rebrowser-patches: CDP session of this frame, only for Chromium pages
+  // rebrowser-patches: CDP session of this frame, only for Chromium pages in patched contexts
   _rebrowserSession(): any {
+    if (!this._page.browserContext._rebrowserPatch)
+      return undefined;
     const delegate: any = this._page.delegate;
     if (!delegate?._sessions)
       return undefined;
@@ -821,7 +823,7 @@ export class Frame extends SdkObject<FrameEventMap> {
   context(world: types.World, useContextPromise = false): Promise<dom.FrameExecutionContext> {
     if (this._page.delegate.noUtilityWorld?.())
       world = 'main';
-    const session = process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' ? this._rebrowserSession() : undefined;
+    const session = this._rebrowserSession();
     if (!session || this._contextData.get(world)!.context || useContextPromise) {
       return this._contextData.get(world)!.contextPromise.then(contextOrDestroyedReason => {
         if (contextOrDestroyedReason instanceof js.ExecutionContext)
@@ -1020,7 +1022,7 @@ export class Frame extends SdkObject<FrameEventMap> {
       const waitUntil = options.waitUntil === undefined ? 'load' : options.waitUntil;
       progress.log(`setting frame content, waiting until "${waitUntil}"`);
       const context = await progress.race(this.utilityContext());
-      const rebrowserSession = process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' ? this._rebrowserSession() : undefined;
+      const rebrowserSession = this._rebrowserSession();
       if (rebrowserSession) {
         // rebrowser-patches: the console tag below needs Runtime.enable, use Page.documentOpened instead
         const openedPromise = new ManualPromise<void>();

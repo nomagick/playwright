@@ -1034,7 +1034,7 @@ export class Worker extends SdkObject<WorkerEventMap> {
 
   // rebrowser-patches: there are no Runtime events, so create the context on demand
   async getExecutionContext(): Promise<js.ExecutionContext> {
-    if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' && !this.existingExecutionContext && this._rebrowserSession) {
+    if (js.rebrowserPatchEnabled(this) && !this.existingExecutionContext && this._rebrowserSession) {
       await this._rebrowserSession.__re__emitExecutionContext({
         world: 'main',
         targetId: this._rebrowserTargetId,
@@ -1062,10 +1062,10 @@ export class Worker extends SdkObject<WorkerEventMap> {
 // rebrowser-patches: without Runtime.enable, Chrome drops CDP bindings when the page navigates (crbug.com/382473087).
 // They are added again when the navigation commits, so a call made before that waits for the binding instead of
 // throwing. The binding itself never stays on the window: the controller captures it (see rebrowserCaptureBinding)
-// and calls it from there. REBROWSER_PATCHES_RUNTIME_FIX_MODE=0 keeps the original source.
-function bindingsControllerSource(): { source: string, capturesBinding: boolean } {
-  const source = js.rebrowserRenameBindings(rawBindingsControllerSource.source);
-  if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] === '0')
+// and calls it from there. Unpatched contexts keep the original source.
+function bindingsControllerSource(patched: boolean): { source: string, capturesBinding: boolean } {
+  const source = js.rebrowserRenameBindings(rawBindingsControllerSource.source, patched);
+  if (!patched)
     return { source, capturesBinding: false };
   const call = '    this._global[this._globalBindingName](JSON.stringify(payload));\n';
   const retry = [
@@ -1119,25 +1119,34 @@ function rebrowserCaptureBinding(controllerExpression: string, bindingName: stri
 }
 
 export class PageBinding extends DisposableObject {
-  // rebrowser-patches: random per process (see rebrowserBindingName)
-  static kBindingName = js.rebrowserBindingName;
+  static kBindingName = '__playwright__binding__';
+
+  // rebrowser-patches: random per process in patched contexts (see rebrowserBindingName)
+  static bindingName(browserContext: BrowserContext): string {
+    return js.rebrowserBindingName(browserContext._rebrowserPatch);
+  }
 
   static createInitScript(browserContext: BrowserContext): InitScript {
-    const controllerSource = bindingsControllerSource();
+    const patched = browserContext._rebrowserPatch;
+    const controllerSource = bindingsControllerSource(patched);
+    const bindingName = PageBinding.bindingName(browserContext);
+    // rebrowser-patches: patched contexts make the controller non-enumerable, so it doesn't show up when page scripts
+    // walk the window
+    const install = patched ? `
+          Object.defineProperty(globalThis, property, {
+            value: new (module.exports.BindingsController())(globalThis, '${bindingName}'),
+            configurable: true,
+            enumerable: false,
+            writable: true,
+          });` : `
+          globalThis[property] = new (module.exports.BindingsController())(globalThis, '${bindingName}');`;
     return new InitScript(browserContext, `
       (() => {
         const module = {};
         ${controllerSource.source}
-        const property = '${js.rebrowserBindingsControllerProperty}';
-        if (!globalThis[property]) {
-          // rebrowser-patches: non-enumerable, so it doesn't show up when page scripts walk the window
-          Object.defineProperty(globalThis, property, {
-            value: new (module.exports.BindingsController())(globalThis, '${PageBinding.kBindingName}'),
-            configurable: true,
-            enumerable: false,
-            writable: true,
-          });
-          ${controllerSource.capturesBinding ? rebrowserCaptureBinding('globalThis[property]', PageBinding.kBindingName) : ''}
+        const property = '${js.rebrowserBindingsControllerProperty(patched)}';
+        if (!globalThis[property]) {${install}
+          ${controllerSource.capturesBinding ? rebrowserCaptureBinding('globalThis[property]', bindingName) : ''}
         }
       })();
     `);
@@ -1153,15 +1162,18 @@ export class PageBinding extends DisposableObject {
     super(parent);
     this.name = name;
     this.playwrightFunction = playwrightFunction;
-    this.initScript = new InitScript(parent, `globalThis['${js.rebrowserBindingsControllerProperty}'].addBinding(${JSON.stringify(name)}, ${!!noGlobal})`);
-    this.cleanupScript = `globalThis['${js.rebrowserBindingsControllerProperty}'].removeBinding(${JSON.stringify(name)})`;
+    const controllerProperty = js.rebrowserBindingsControllerProperty(js.rebrowserPatchEnabled(parent));
+    this.initScript = new InitScript(parent, `globalThis['${controllerProperty}'].addBinding(${JSON.stringify(name)}, ${!!noGlobal})`);
+    this.cleanupScript = `globalThis['${controllerProperty}'].removeBinding(${JSON.stringify(name)})`;
   }
 
   static async dispatch(page: Page, payload: string, context: dom.FrameExecutionContext) {
-    if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] !== '0' && !payload.includes('{')) {
-      // ignore as it's not a JSON but a string from addBinding method
-      return
+    const patched = page.browserContext._rebrowserPatch;
+    if (patched && !payload.includes('{')) {
+      // rebrowser-patches: ignore as it's not a JSON but a string from the binding handshake
+      return;
     }
+    const controllerProperty = js.rebrowserBindingsControllerProperty(patched);
     const { name, seq, serializedArgs } = JSON.parse(payload) as BindingPayload;
     try {
       assert(context.world);
@@ -1172,9 +1184,9 @@ export class PageBinding extends DisposableObject {
         throw new Error(`serializedArgs is not an array. This can happen when Array.prototype.toJSON is defined incorrectly`);
       const args = serializedArgs.map(a => parseEvaluationResultValue(a));
       const result = await binding.playwrightFunction({ frame: context.frame, page, context: page.browserContext }, ...args);
-      context.evaluateExpressionHandle(`arg => globalThis['${js.rebrowserBindingsControllerProperty}'].deliverBindingResult(arg)`, { isFunction: true }, { name, seq, result }).catch(e => debugLogger.log('error', e));
+      context.evaluateExpressionHandle(`arg => globalThis['${controllerProperty}'].deliverBindingResult(arg)`, { isFunction: true }, { name, seq, result }).catch(e => debugLogger.log('error', e));
     } catch (error) {
-      context.evaluateExpressionHandle(`arg => globalThis['${js.rebrowserBindingsControllerProperty}'].deliverBindingResult(arg)`, { isFunction: true }, { name, seq, error }).catch(e => debugLogger.log('error', e));
+      context.evaluateExpressionHandle(`arg => globalThis['${controllerProperty}'].deliverBindingResult(arg)`, { isFunction: true }, { name, seq, error }).catch(e => debugLogger.log('error', e));
     }
   }
 
@@ -1190,7 +1202,7 @@ export class InitScript extends DisposableObject {
     super(owner);
     // rebrowser-patches: init scripts from the client may spell out the bindings controller name (function arguments)
     this.source = `(() => {
-      ${js.rebrowserRenameBindings(source)}
+      ${js.rebrowserRenameBindings(source, js.rebrowserPatchEnabled(owner))}
     })();`;
   }
 

@@ -261,6 +261,9 @@ await browser.CloseAsync();
 ### option: Browser.newContext.proxy = %%-context-option-proxy-%%
 * since: v1.8
 
+### option: Browser.newContext.reBrowserPatch = %%-context-option-rebrowserpatch-%%
+* since: v1.62
+
 ### option: Browser.newContext.clientCertificates = %%-context-option-clientCertificates-%%
 * since: 1.46
 
@@ -288,6 +291,9 @@ testing frameworks should explicitly create [`method: Browser.newContext`] follo
 
 ### option: Browser.newPage.proxy = %%-context-option-proxy-%%
 * since: v1.8
+
+### option: Browser.newPage.reBrowserPatch = %%-context-option-rebrowserpatch-%%
+* since: v1.62
 
 ### option: Browser.newPage.clientCertificates = %%-context-option-clientCertificates-%%
 * since: 1.46

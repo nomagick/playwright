@@ -31,6 +31,7 @@ const debugLoggerColorMap = {
   'server:channel': 34, // green
   'server:metadata': 33, // blue,
   'recorder': 45, // cyan
+  'rebrowser': 33, // blue
 };
 export type LogName = keyof typeof debugLoggerColorMap;
 

@@ -409,8 +409,8 @@ export class Chromium extends BrowserType {
     // rebrowser-patches: hide navigator.webdriver with --disable-blink-features=AutomationControlled,
     // merged with the user's own --disable-blink-features, and drop the default switches pages can notice:
     // popups opened without a click, history updates past 200 in 10 s and unpartitioned third-party storage.
-    // REBROWSER_PATCHES_WEBDRIVER_FIX=0 turns all of it off.
-    if (process.env['REBROWSER_PATCHES_WEBDRIVER_FIX'] !== '0') {
+    // Only with the reBrowserPatch launch option.
+    if (options.reBrowserPatch) {
       const featuresPrefix = '--disable-features=';
       const patchedArguments = chromeArguments
           .filter(arg => arg !== '--disable-ipc-flooding-protection' && arg !== '--disable-popup-blocking')

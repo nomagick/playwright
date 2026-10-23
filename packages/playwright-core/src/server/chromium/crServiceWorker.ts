@@ -69,7 +69,8 @@ export class CRServiceWorker extends Worker {
       this.browserContext.emit(BrowserContext.Events.Console, message);
     });
 
-    if (process.env['REBROWSER_PATCHES_RUNTIME_FIX_MODE'] === '0')
+    // rebrowser-patches: patched contexts skip Runtime.enable
+    if (!browserContext._rebrowserPatch)
       session.send('Runtime.enable', {}).catch(e => {});
     emulateContextInWorker(session, this.browserContext._options);
     session.send('Runtime.runIfWaitingForDebugger').catch(e => {});

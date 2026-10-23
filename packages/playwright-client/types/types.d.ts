@@ -11301,6 +11301,14 @@ export interface Browser {
     };
 
     /**
+     * Applies the [rebrowser-patches](https://github.com/rebrowser/rebrowser-patches) runtime patches to this context, so
+     * pages can't tell they are automated: no `Runtime.enable` (execution contexts are created on demand instead), random
+     * names for Playwright's binding, bindings controller and `UtilityScript`, and a plain utility world name. Only
+     * supported in Chromium. Defaults to `false`.
+     */
+    reBrowserPatch?: boolean;
+
+    /**
      * Enables [HAR](http://www.softwareishard.com/blog/har-12-spec) recording for all pages into `recordHar.path` file.
      * If not specified, the HAR is not recorded. Make sure to await
      * [browserContext.close([options])](https://playwright.dev/docs/api/class-browsercontext#browser-context-close) for
@@ -17390,6 +17398,20 @@ export interface BrowserType<Unused = {}> {
     };
 
     /**
+     * Applies the [rebrowser-patches](https://github.com/rebrowser/rebrowser-patches) launch-argument patches: hides
+     * `navigator.webdriver` with `--disable-blink-features=AutomationControlled` (merged with any
+     * `--disable-blink-features` in
+     * [`args`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-option-args)), and drops
+     * `--disable-popup-blocking`, `--disable-ipc-flooding-protection` and the `ThirdPartyStoragePartitioning` entry of
+     * `--disable-features`. With
+     * [browserType.launchPersistentContext(userDataDir[, options])](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context),
+     * it also applies the context patches, see
+     * [`reBrowserPatch`](https://playwright.dev/docs/api/class-browser#browser-new-context-option-re-browser-patch). Only
+     * supported in Chromium. Defaults to `false`.
+     */
+    reBrowserPatch?: boolean;
+
+    /**
      * Enables [HAR](http://www.softwareishard.com/blog/har-12-spec) recording for all pages into `recordHar.path` file.
      * If not specified, the HAR is not recorded. Make sure to await
      * [browserContext.close([options])](https://playwright.dev/docs/api/class-browsercontext#browser-context-close) for
@@ -17773,6 +17795,20 @@ export interface BrowserType<Unused = {}> {
        */
       password?: string;
     };
+
+    /**
+     * Applies the [rebrowser-patches](https://github.com/rebrowser/rebrowser-patches) launch-argument patches: hides
+     * `navigator.webdriver` with `--disable-blink-features=AutomationControlled` (merged with any
+     * `--disable-blink-features` in
+     * [`args`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-option-args)), and drops
+     * `--disable-popup-blocking`, `--disable-ipc-flooding-protection` and the `ThirdPartyStoragePartitioning` entry of
+     * `--disable-features`. With
+     * [browserType.launchPersistentContext(userDataDir[, options])](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context),
+     * it also applies the context patches, see
+     * [`reBrowserPatch`](https://playwright.dev/docs/api/class-browser#browser-new-context-option-re-browser-patch). Only
+     * supported in Chromium. Defaults to `false`.
+     */
+    reBrowserPatch?: boolean;
 
     /**
      * Maximum time in milliseconds to wait for the browser instance to start. Defaults to `30000` (30 seconds). Pass `0`
@@ -25233,6 +25269,20 @@ export interface LaunchOptions {
   };
 
   /**
+   * Applies the [rebrowser-patches](https://github.com/rebrowser/rebrowser-patches) launch-argument patches: hides
+   * `navigator.webdriver` with `--disable-blink-features=AutomationControlled` (merged with any
+   * `--disable-blink-features` in
+   * [`args`](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-option-args)), and drops
+   * `--disable-popup-blocking`, `--disable-ipc-flooding-protection` and the `ThirdPartyStoragePartitioning` entry of
+   * `--disable-features`. With
+   * [browserType.launchPersistentContext(userDataDir[, options])](https://playwright.dev/docs/api/class-browsertype#browser-type-launch-persistent-context),
+   * it also applies the context patches, see
+   * [`reBrowserPatch`](https://playwright.dev/docs/api/class-browser#browser-new-context-option-re-browser-patch). Only
+   * supported in Chromium. Defaults to `false`.
+   */
+  reBrowserPatch?: boolean;
+
+  /**
    * Slows down Playwright operations by the specified amount of milliseconds. Useful so that you can see what is going
    * on.
    */
@@ -25671,6 +25721,14 @@ export interface BrowserContextOptions {
      */
     password?: string;
   };
+
+  /**
+   * Applies the [rebrowser-patches](https://github.com/rebrowser/rebrowser-patches) runtime patches to this context, so
+   * pages can't tell they are automated: no `Runtime.enable` (execution contexts are created on demand instead), random
+   * names for Playwright's binding, bindings controller and `UtilityScript`, and a plain utility world name. Only
+   * supported in Chromium. Defaults to `false`.
+   */
+  reBrowserPatch?: boolean;
 
   /**
    * Enables [HAR](http://www.softwareishard.com/blog/har-12-spec) recording for all pages into `recordHar.path` file.
